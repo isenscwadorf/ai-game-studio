@@ -8,43 +8,55 @@ Last updated: 2026-08-23
 
 ## Current branch / review
 
-Branch: `isenscwadorf/the-6-define-canonical-engine-schemas`
-PR: `#2 docs: define canonical engine schema design`
+Branch: `isenscwadorf/the-6-schema-implementation`
+Implementation PR: not opened yet at the time of this state update.
 
 ## Current objective
 
-Merge the approved THE-6 design/ADR/implementation-plan baseline, then implement the machine-readable schema registry and validation fixtures on a dedicated implementation branch using test-first development.
+Finish THE-6 by reviewing the published schema implementation, obtaining GitHub CI evidence, and merging only after the implementation branch is verified. Then begin THE-7: the Snowed In vertical-slice specification.
 
 ## Completed
 
 - PR #1 merged: durable repository memory and architecture baseline.
-- Canonical schema design reviewed and approved by the project owner.
-- THE-6 implementation plan written.
-- ADR-0001 through ADR-0012 recorded, including:
-  - shared Character model;
-  - autonomous Character agency;
-  - Actions vs Activities;
-  - provider-neutral AI adapters;
-  - World Truth vs Character beliefs;
-  - strict JSON + JSON Schema 2020-12;
-  - Definition vs Runtime-State separation;
-  - stable IDs and explicit extensions;
-  - declarative/no-eval gameplay contracts;
-  - atomic Copilot ChangeSets;
-  - semantic asset identity/provenance;
-  - Godot 4.7.2 stable implementation pin.
+- PR #2 merged: canonical schema design, implementation plan, and ADR baseline.
+- ADR-0001 through ADR-0012 accepted.
+- Machine-readable JSON Schema Draft 2020-12 registry implemented.
+- Required foundational contracts implemented, including a generic `WorldEntityDefinition`.
+- Definition/runtime separation represented by distinct schema families.
+- Character/Controller, world, interaction, event, cognition, relationship, AI, ChangeSet, and asset contracts implemented.
+- Asset variants use an explicit `asset-variant-ref` instead of pretending variants are ordinary definitions.
+- Provider/generation configuration structurally rejects likely secret-key field names case-insensitively.
+- Local/offline `$ref` registry implemented.
+- Structural and semantic fixture suites implemented.
+- Semantic validation checks duplicate IDs, missing definition refs, executor/effect registration, extension namespaces, relationship ranges, and ChangeSet dependency cycles.
+- GitHub Actions schema-validation workflow added.
 
 ## Runtime status
 
-No gameplay runtime implementation exists yet. This is intentional. THE-6 implements data contracts and validation tooling only.
+No gameplay runtime implementation exists yet. This is intentional. THE-6 is contract/schema validation infrastructure only.
 
-## Tests
+## Verification evidence
 
-No committed test harness exists yet. The approved THE-6 implementation plan requires tests/fixtures first, then the minimum validator/schema implementation to make them pass.
+Fresh local verification of the final implementation snapshot:
+
+```text
+python -m unittest discover -s tests -p 'test_*.py' -v
+17 tests, 0 failures
+
+python tools/schema_validation/validate_fixtures.py
+59 fixture cases, 0 mismatches
+
+python -m compileall -q tools tests
+exit 0
+```
+
+The tests include structural positive/negative cases, expected validation-keyword checks, local reference resolution, schema dispatch, semantic error-code fixtures, ChangeSet dependency-cycle detection, case-insensitive secret-key rejection, and direct CLI execution from repository root.
+
+GitHub CI status is still required after the implementation PR is opened; do not call THE-6 complete solely from the local run above.
 
 ## Known blockers
 
-The general-purpose container cannot resolve external GitHub hosts, so GitHub checkout cannot be used there. Schema validation will be developed in an isolated local Python workspace using the same `jsonschema==4.26.0` dependency and then published to the implementation branch only after fresh RED/GREEN verification.
+None in the schema implementation. The general-purpose container cannot clone GitHub directly, so the implementation was developed and verified in an isolated local workspace, then published through the authorized GitHub connector.
 
 ## Accepted architecture decisions
 
@@ -66,15 +78,15 @@ The general-purpose container cannot resolve external GitHub hosts, so GitHub ch
 
 ## Next three concrete tasks
 
-1. Merge PR #2.
-2. Create the THE-6 schema implementation branch and execute the test-first implementation plan.
-3. Open implementation PR with validation evidence; then begin THE-7 Snowed In specification.
+1. Open and review the THE-6 implementation PR; require GitHub CI evidence.
+2. Merge THE-6 and mark Linear THE-6 Done only after verification/review.
+3. Start Linear THE-7 and write the Snowed In vertical-slice specification.
 
 ## Still unresolved before substantial runtime implementation
 
-- Whether the editor shell is entirely inside Godot or uses a separate desktop UI layer around the Godot runtime.
-- Exact Godot-side runtime validation/testing tooling beyond the schema CI harness.
+- Whether the creator editor shell is entirely inside Godot or uses a separate desktop UI layer around the Godot runtime.
+- Exact Godot-side runtime testing/tooling beyond the schema CI harness.
 
 ## Handoff note
 
-Read `docs/START_HERE.md`, this file, ADR-0001 through ADR-0012, the active schema design spec, and `docs/plans/2026-08-23-the-6-schema-implementation-plan.md` before continuing. Do not add gameplay runtime behavior to THE-6.
+Read `docs/START_HERE.md`, this file, ADR-0001 through ADR-0012, `docs/specs/2026-08-23-canonical-engine-schemas-design.md`, and `docs/plans/2026-08-23-the-6-schema-implementation-plan.md`. Run the exact schema commands above before changing THE-6 contracts. Do not begin gameplay runtime behavior until THE-6 and the Snowed In spec are accepted.
