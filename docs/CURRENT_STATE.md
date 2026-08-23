@@ -8,12 +8,12 @@ Last updated: 2026-08-23
 
 ## Current branch / review
 
-Branch: `isenscwadorf/the-6-schema-implementation`
-Implementation PR: not opened yet at the time of this state update.
+Branch: `isenscwadorf/the-6-schema-implementation`  
+PR: `#3 feat: implement canonical schema registry and validation`
 
 ## Current objective
 
-Finish THE-6 by reviewing the published schema implementation, obtaining GitHub CI evidence, and merging only after the implementation branch is verified. Then begin THE-7: the Snowed In vertical-slice specification.
+Finish THE-6 by obtaining green GitHub CI on PR #3 and completing the final requirements/diff review. Merge only after both gates are clean. Then begin THE-7: the Snowed In vertical-slice specification.
 
 ## Completed
 
@@ -21,14 +21,16 @@ Finish THE-6 by reviewing the published schema implementation, obtaining GitHub 
 - PR #2 merged: canonical schema design, implementation plan, and ADR baseline.
 - ADR-0001 through ADR-0012 accepted.
 - Machine-readable JSON Schema Draft 2020-12 registry implemented.
-- Required foundational contracts implemented, including a generic `WorldEntityDefinition`.
+- Required foundational contracts implemented, including generic `WorldEntityDefinition`.
 - Definition/runtime separation represented by distinct schema families.
 - Character/Controller, world, interaction, event, cognition, relationship, AI, ChangeSet, and asset contracts implemented.
-- Asset variants use an explicit `asset-variant-ref` instead of pretending variants are ordinary definitions.
-- Provider/generation configuration structurally rejects likely secret-key field names case-insensitively.
+- Asset variants use an explicit `asset-variant-ref` rather than pretending variants are ordinary definitions.
 - Local/offline `$ref` registry implemented.
+- Action/Activity parameter-schema URNs are required to resolve to registered schemas; initial `action.open` and `activity.cook_meal` parameter contracts are registered.
+- Provider/generation configuration uses a recursive safe-config schema that rejects credential-like keys at any nesting depth while allowing legitimate settings such as `max_tokens`.
 - Structural and semantic fixture suites implemented.
-- Semantic validation checks duplicate IDs, missing definition refs, executor/effect registration, extension namespaces, relationship ranges, and ChangeSet dependency cycles.
+- Semantic validation checks duplicate IDs, missing definition refs, registered executors/effects/parameter schemas/extensions, relationship range/default correctness, relationship runtime values, ChangeSet duplicate operation IDs, missing dependencies, and dependency cycles.
+- Semantic validation skips deeper semantic assumptions for structurally invalid documents instead of crashing.
 - GitHub Actions schema-validation workflow added.
 
 ## Runtime status
@@ -37,11 +39,11 @@ No gameplay runtime implementation exists yet. This is intentional. THE-6 is con
 
 ## Verification evidence
 
-Fresh local verification of the final implementation snapshot:
+Fresh local verification after the final review-hardening changes:
 
 ```text
 python -m unittest discover -s tests -p 'test_*.py' -v
-17 tests, 0 failures
+23 tests, 0 failures
 
 python tools/schema_validation/validate_fixtures.py
 59 fixture cases, 0 mismatches
@@ -50,13 +52,23 @@ python -m compileall -q tools tests
 exit 0
 ```
 
-The tests include structural positive/negative cases, expected validation-keyword checks, local reference resolution, schema dispatch, semantic error-code fixtures, ChangeSet dependency-cycle detection, case-insensitive secret-key rejection, and direct CLI execution from repository root.
+The first GitHub Actions run on PR #3 failed before tests because `actions/setup-python` cache auto-detection looked for `requirements.txt`/`pyproject.toml` instead of this repo's `requirements-dev.txt`. The workflow was corrected with `cache-dependency-path: requirements-dev.txt`. A new GitHub CI run on the current PR head is required before THE-6 can be called complete.
 
-GitHub CI status is still required after the implementation PR is opened; do not call THE-6 complete solely from the local run above.
+## Review hardening completed
+
+PR review found and fixed these additional issues before merge:
+
+- semantic validation could crash when a structurally invalid relationship-dimension definition was later used;
+- Action/Activity parameter schema URNs were not verified against the registry;
+- relationship dimension `min/max/default` semantics were not checked;
+- duplicate ChangeSet operation IDs were not rejected;
+- secret-key filtering was only top-level and also incorrectly rejected legitimate names containing `token` such as `max_tokens`.
+
+Each fix has regression coverage.
 
 ## Known blockers
 
-None in the schema implementation. The general-purpose container cannot clone GitHub directly, so the implementation was developed and verified in an isolated local workspace, then published through the authorized GitHub connector.
+No design/code blocker is known. The only remaining gate is green GitHub CI plus final PR review evidence.
 
 ## Accepted architecture decisions
 
@@ -78,8 +90,8 @@ None in the schema implementation. The general-purpose container cannot clone Gi
 
 ## Next three concrete tasks
 
-1. Open and review the THE-6 implementation PR; require GitHub CI evidence.
-2. Merge THE-6 and mark Linear THE-6 Done only after verification/review.
+1. Require green GitHub CI on current PR #3 head and finish the PR requirements/diff audit.
+2. Merge THE-6 only after approval of the integration step; then mark Linear THE-6 Done.
 3. Start Linear THE-7 and write the Snowed In vertical-slice specification.
 
 ## Still unresolved before substantial runtime implementation
