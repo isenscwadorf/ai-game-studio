@@ -10,8 +10,9 @@ class FixtureValidationTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.registry = LocalSchemaRegistry(ROOT)
-        manifest = json.loads((ROOT / "fixtures" / "schemas" / "manifest.json").read_text(encoding="utf-8"))
-        cls.cases = manifest["cases"]
+        cls.cases = []
+        for path in sorted((ROOT / "fixtures" / "schemas").glob("cases-*.json")):
+            cls.cases.extend(json.loads(path.read_text(encoding="utf-8"))["cases"])
 
     def test_fixture_manifest_has_positive_and_negative_cases(self):
         outcomes = {case["valid"] for case in self.cases}
@@ -83,6 +84,7 @@ class FixtureValidationTests(unittest.TestCase):
             "valid_effect-operation",
             "valid_fact",
             "valid_validation-error",
+            "valid_asset-variant-ref",
         }
         for case in self.cases:
             if not case["valid"] or case["name"] in nondispatchable:

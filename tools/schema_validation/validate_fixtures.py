@@ -14,9 +14,11 @@ from tools.schema_validation.registry import LocalSchemaRegistry
 def validate_all(root: Path) -> dict:
     root = Path(root)
     registry = LocalSchemaRegistry(root)
-    manifest = json.loads((root / "fixtures" / "schemas" / "manifest.json").read_text(encoding="utf-8"))
+    cases = []
+    for path in sorted((root / "fixtures" / "schemas").glob("cases-*.json")):
+        cases.extend(json.loads(path.read_text(encoding="utf-8"))["cases"])
     mismatches = []
-    for case in manifest["cases"]:
+    for case in cases:
         document = case["instance"]
         errors = list(registry.iter_errors(case["schema_urn"], document))
         actual_valid = not errors
@@ -26,7 +28,7 @@ def validate_all(root: Path) -> dict:
                 "expected_valid": case["valid"],
                 "errors": [error.message for error in errors[:10]],
             })
-    return {"total": len(manifest["cases"]), "mismatches": len(mismatches), "details": mismatches}
+    return {"total": len(cases), "mismatches": len(mismatches), "details": mismatches}
 
 
 def main() -> int:

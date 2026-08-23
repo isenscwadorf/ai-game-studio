@@ -7,17 +7,18 @@ from tools.schema_validation.semantic import SemanticValidator
 
 ROOT = Path(__file__).resolve().parents[2]
 
-
 class SemanticValidationTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.registry = LocalSchemaRegistry(ROOT)
         cls.validator = SemanticValidator(cls.registry)
-        cls.manifest = json.loads((ROOT / "fixtures" / "semantic" / "manifest.json").read_text(encoding="utf-8"))
+        cls.cases = []
+        for path in sorted((ROOT / "fixtures" / "semantic").glob("cases-*.json")):
+            cls.cases.extend(json.loads(path.read_text(encoding="utf-8"))["cases"])
 
     def test_semantic_fixtures_match_expected_codes(self):
         failures = []
-        for case in self.manifest["cases"]:
+        for case in self.cases:
             project = case["project"]
             errors = self.validator.validate_project(project)
             codes = sorted({error["code"] for error in errors})
@@ -35,9 +36,9 @@ class SemanticValidationTests(unittest.TestCase):
             "mode": "atomic",
             "operations": [
                 {"operation_id": "op-1", "operation_type": "delete_definition", "target_ref": {"ref": "character.father"}, "depends_on": ["op-2"], "destructive": True},
-                {"operation_id": "op-2", "operation_type": "delete_definition", "target_ref": {"ref": "character.sarah"}, "depends_on": ["op-1"], "destructive": True},
+                {"operation_id": "op-2", "operation_type": "delete_definition", "target_ref": {"ref": "character.sarah"}, "depends_on": ["op-1"], "destructive": True}
             ],
-            "provenance": {"actor": "creator_copilot", "ai_role_ref": {"ref": "ai_role.creator"}},
+            "provenance": {"actor": "creator_copilot", "ai_role_ref": {"ref": "ai_role.creator"}}
         }
         errors = self.validator.validate_changeset(changeset)
         self.assertIn("CHANGESET_DEPENDENCY_CYCLE", {e["code"] for e in errors})
