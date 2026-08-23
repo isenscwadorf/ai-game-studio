@@ -28,6 +28,9 @@ class LocalSchemaRegistry:
     def schema_by_urn(self, urn: str) -> dict:
         return self._schemas[urn]
 
+    def has_urn(self, urn: str) -> bool:
+        return urn in self._schemas
+
     def urn_for_schema_id(self, schema_id: str) -> str:
         return self._schema_id_to_urn[schema_id]
 
