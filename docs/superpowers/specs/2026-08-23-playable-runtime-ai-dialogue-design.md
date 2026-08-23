@@ -1,119 +1,111 @@
 # Creator MVP Slice 2 — Playable Runtime + Live AI Dialogue
 
 Date: 2026-08-23
-Status: Approved design, pending implementation planning
+Status: Approved in chat; pending user review of this written spec
 Parent design: `docs/superpowers/specs/2026-08-23-creator-mvp-design.md`
 
 ## 1. Purpose
 
-Slice 2 turns the Creator Foundation into a genuinely playable VN-style authoring loop on Windows.
+Slice 2 turns the Creator Foundation into a playable Windows VN authoring loop.
 
-The user must be able to author Characters, Locations, imported visual assets, authored dialogue and choices, press Play, and receive a separate Godot game window that displays the current project. During normal NPC conversations, free-text AI dialogue is available by default through OpenRouter, while authored scenes may temporarily restrict input to explicit choices.
+The user can author Characters, Locations, imported visual assets, and branching dialogue, then press Play to launch a separate Godot game window. During normal NPC conversation, free-text AI dialogue is available through OpenRouter. Authored scenes may temporarily restrict input to explicit choices.
 
-This slice deliberately adds live AI speech without pulling forward the full systemic NPC brain. AI output is dialogue text only. It cannot move characters, modify inventory, trigger events, alter relationships, create memories, or mutate canonical project definitions.
+This is an intentional sequencing change from the parent five-slice decomposition: only the minimum runtime OpenRouter dialogue path moves forward. Creator Copilot, autonomous NPC planning, systemic actions, cognition, AI image generation, and TTS remain later work.
+
+AI output in Slice 2 is speech only. It cannot move characters, change inventory, fire events, alter relationships, create memories, or mutate canonical project definitions.
 
 ## 2. Locked product decisions
 
 - Windows 10/11 x64 first.
 - Creator remains Tauri + React + TypeScript.
-- Godot 4.7.2 stable remains the pinned runtime baseline per ADR-0012.
-- Playtest launches Godot as a separate local process and separate game window.
-- Creator must remain open to provide the runtime bridge and live AI gateway.
-- Runtime presentation is VN/location-screen based, not top-down.
-- Navigation uses logical Location choices/menu; no walking/pathfinding visuals.
-- Manual image import is included in Slice 2.
-- Imported images are copied into the project so the project remains self-contained.
-- Character visuals are sprites only. There is no portrait mode.
-- Supported sprite framing modes are `full_body` and `two_thirds`.
-- `two_thirds` means approximately head-to-knees composition.
-- Transparent-background PNG/WebP sprites are preferred for Characters.
-- Location visuals are background images.
-- Authored dialogue uses a simple ordered scene/entry editor, not a node graph.
-- Authored dialogue supports lines, narration, choices, and named/immutable jump targets.
-- Free-text AI conversation is available by default during normal NPC conversations.
-- An authored scene may explicitly set input mode to `choices_only` to disable free text temporarily.
-- Live AI dialogue is speech-only in this slice.
-- OpenRouter is the first live runtime dialogue provider behind the existing provider abstraction.
-- No TTS in Slice 2.
-- No AI image generation in Slice 2.
-- No standalone game export in v0.1.
+- Godot 4.7.2 stable remains the runtime baseline per ADR-0012.
+- Godot is packaged runtime infrastructure; the user does not need the Godot editor installed.
+- Playtest opens as a separate local game window.
+- Creator must remain open for the runtime bridge and live AI gateway.
+- Runtime presentation is VN/location-screen based, never top-down.
+- Navigation is logical Location selection; no walking/pathfinding visuals.
+- Manual image import is included.
+- Imported images are copied inside the project.
+- Character visuals are sprites only; there is no portrait mode.
+- Sprite framing is exactly `full_body` or `two_thirds`.
+- `two_thirds` means approximately head to knees.
+- Authored dialogue uses an ordered scene/entry editor, not a node graph.
+- Dialogue supports lines, narration, choices, and immutable jump targets.
+- Free-text AI conversation is available by default when an active NPC conversation exists.
+- Authored scenes may use `choices_only` mode to temporarily disable free text.
+- OpenRouter is the first live runtime text provider behind existing AI provider abstractions.
+- No TTS, AI image generation, standalone export, hot reload requirement, or systemic NPC autonomy in Slice 2.
 
 ## 3. Process architecture
-
-### 3.1 High-level process model
 
 ```text
 AI Game Studio Creator
         |
-        | launches
+        | launches packaged child process
         v
 Godot Playtest Runtime
         |
-        | localhost, versioned WebSocket
+        | localhost WebSocket, versioned JSON
         v
-Creator Runtime Gateway
+Tauri Rust Runtime Gateway
         |
-        +-- runtime lifecycle / logs / session state
+        +-- lifecycle / logs / session state
         +-- live dialogue requests
                   |
                   v
-           OpenRouter Adapter
+           OpenRouter adapter
 ```
 
-The Creator owns the playtest session. Godot does not receive Creator service credentials.
+The Creator owns the playtest session. Godot receives no provider credential and no Creator mutation capability.
 
-### 3.2 Native ownership boundary
+### 3.1 Native ownership boundary
 
 The Tauri Rust backend owns:
 
-- the localhost WebSocket listener;
-- playtest session creation and per-session secret generation;
-- runtime process launch/termination;
+- localhost WebSocket listener;
+- playtest session ID and secret generation;
+- child runtime launch/termination;
 - bridge authentication and message validation;
 - secure OpenRouter credential access;
-- outbound OpenRouter requests;
-- credential redaction in logs/errors;
-- structured lifecycle state delivered to the React UI.
+- outbound provider calls;
+- provider secret redaction;
+- runtime lifecycle state exposed to React.
 
-React may request these operations and display their state, but raw provider secrets must not be returned to the WebView after being stored.
+React can configure and request operations through narrow native commands but does not receive a stored raw API key after save.
 
-Godot owns gameplay presentation and runtime-local conversation/session state only. It does not own provider credentials, Creator mutation APIs, or canonical project writes.
+Godot owns presentation and playtest-local state only. It does not write canonical project definitions.
 
-### 3.3 Local bridge security
+### 3.2 Bridge security
 
-The bridge must:
+Each playtest uses:
 
-- bind only to loopback (`127.0.0.1` / equivalent local-only binding);
-- allocate an ephemeral port per Creator session;
-- use a cryptographically random per-playtest session secret;
-- include a playtest session ID in all session-scoped messages;
-- require runtime authentication before accepting normal traffic;
-- reject unknown protocol versions and malformed message envelopes;
-- cap message sizes and reject unexpected message kinds;
-- never accept arbitrary filesystem paths or shell commands from Godot messages.
+- loopback-only bind;
+- ephemeral local port;
+- opaque session ID;
+- cryptographically random per-session secret;
+- protocol version validation;
+- authenticated runtime hello before normal traffic;
+- typed message allowlist;
+- bounded message sizes.
 
-The session secret may be passed to the child runtime through process launch arguments or environment variables, but it must never be persisted into the project.
+Bridge messages never expose generic shell execution, arbitrary filesystem operations, or arbitrary Creator commands.
 
-## 4. Runtime bridge contract
+The session secret may be passed to the child process at launch but is never persisted into the project.
 
-### 4.1 Versioning
+## 4. Runtime bridge protocol
 
-Slice 2 introduces a dedicated versioned bridge contract. The exact transport is WebSocket over localhost, but the message contract is transport-independent JSON.
-
-Every message envelope contains:
+Every JSON message uses this envelope:
 
 ```text
 protocol: "aigs.runtime-bridge"
 protocol_version: 1
-session_id: <opaque playtest session ID>
-message_id: <opaque unique message ID>
+session_id: <opaque ID>
+message_id: <opaque unique ID>
 type: <registered message type>
 payload: <typed payload>
 ```
 
-### 4.2 Minimum message set
-
-Creator -> Runtime:
+Minimum Creator -> Runtime messages:
 
 - `session.accepted`
 - `project.load`
@@ -121,7 +113,7 @@ Creator -> Runtime:
 - `dialogue.error`
 - `runtime.stop`
 
-Runtime -> Creator:
+Minimum Runtime -> Creator messages:
 
 - `session.hello`
 - `runtime.ready`
@@ -132,135 +124,118 @@ Runtime -> Creator:
 - `dialogue.request`
 - `runtime.exiting`
 
-The first implementation may add narrowly necessary typed messages, but must not introduce generic remote execution or arbitrary command payloads.
+A fake/headless runtime must implement this same protocol for deterministic tests covering authentication, ready, load success/failure, logs, dialogue, malformed connections, clean exit, and crash/unexpected exit.
 
-### 4.3 Headless fake runtime
+## 5. Canonical schema additions
 
-A fake/headless runtime harness is required so Creator bridge tests can verify launch/session behavior without opening a Godot window.
+Slice 2 extends the existing v1 contract additively where possible so existing valid Slice 1 projects remain valid.
 
-The harness must be able to simulate:
+### 5.1 Project manifest playtest settings
 
-- successful authentication;
-- ready;
-- project loaded;
-- project load error;
-- structured log events;
-- dialogue request/response;
-- malformed/unauthorized connection;
-- clean exit;
-- crash/unexpected exit.
-
-## 5. Project asset model
-
-### 5.1 Existing asset contracts remain authoritative
-
-Slice 2 reuses the existing Asset Identity and Asset Variant architecture. Character and Location definitions continue to point at `visual_identity_ref`; no second visual reference mechanism is added.
-
-Manual import creates or updates the subject's Asset Identity and active imported variant while storing the copied file inside the project.
-
-### 5.2 Imported file layout
-
-Imported visual files live under project-relative paths such as:
+`project-manifest` gains an optional strict `playtest` object:
 
 ```text
-assets/imported/characters/<asset-id>/<variant-or-file>
-assets/imported/locations/<asset-id>/<variant-or-file>
-assets/metadata/
+playtest:
+  start_location_ref: DefinitionRef | absent
+  entry_scene_ref: DefinitionRef | absent
 ```
 
-Absolute source-machine paths are never canonical project data.
+These fields are optional for backward compatibility. The Creator exposes them as Playtest Start Location and Entry Scene. A project may launch location-only without an entry scene, but the Slice 2 end-to-end acceptance project configures both.
 
-### 5.3 Character sprite framing
+### 5.2 Location destinations
 
-Character visuals are sprites, not portraits.
+`location-definition` gains optional `destination_refs: DefinitionRef[]` for logical VN navigation.
 
-Supported framing enum:
+`child_location_refs` remains hierarchy and is not silently reinterpreted as navigation.
+
+### 5.3 Asset variant presentation
+
+`asset-variant-record` gains an optional strict `presentation` object. For Character visuals it may contain:
 
 ```text
-full_body
-two_thirds
+sprite_framing: full_body | two_thirds
 ```
 
-Rules:
+Existing variant records without `presentation` remain valid. For a Character's active visual variant, Creator writes one of the two framing values. Location background variants do not require sprite framing.
 
-- `full_body` preserves the full character from head to feet where supplied.
-- `two_thirds` targets approximately head-to-knees composition.
-- Runtime must not automatically crop a full-body sprite into a bust/portrait.
-- Runtime scales sprites to fit available stage space while preserving aspect ratio.
-- Multiple visible characters may scale down modestly to fit the scene.
-- The current speaker may receive subtle visual emphasis, but framing mode remains intact.
+### 5.4 Dialogue schema family
 
-Framing is metadata associated with the active character visual variant or its presentation binding, not inferred from filename.
+Add `schemas/v1/dialogue/` with strict Draft 2020-12 contracts for:
 
-### 5.4 Missing asset behavior
+- dialogue scene definition;
+- discriminated dialogue entry union;
+- choice option;
+- any small reference type required for branch targets.
 
-A missing optional visual file must not crash playtest.
+All new contracts are registered in `schemas/registry.json` and participate in Python/Creator validation parity.
 
-Runtime fallback:
+## 6. Imported asset model
 
-- Character: clean named sprite placeholder.
-- Location: clean named background placeholder.
+Existing Asset Identity and Asset Variant contracts remain authoritative. Character and Location definitions continue to point through `visual_identity_ref`; no parallel visual-reference field is introduced.
 
-Broken canonical references remain validation errors; a referenced file becoming unavailable after validation becomes a runtime warning plus placeholder.
+Imported files are copied under project-relative locations such as:
 
-## 6. Character authoring changes
+```text
+assets/imported/characters/<asset-id>/...
+assets/imported/locations/<asset-id>/...
+```
 
-Slice 2 expands the Character editor to expose enough of the existing canonical persona for useful runtime AI conversation.
+Persisted asset storage uses project-relative paths and content hashes through the existing variant record. Absolute source-machine paths are never canonical data.
 
-Minimum editable fields:
+Supported Slice 2 image formats are PNG, WebP, and JPEG. Transparent PNG/WebP is preferred for Character sprites. SVG/GIF and arbitrary executable/container formats are not accepted in this slice.
+
+Character visual actions:
+
+- Import Sprite
+- Replace Sprite
+- Remove Sprite
+- preview
+- Full Body / Two Thirds framing selector
+
+Location visual actions:
+
+- Import Background
+- Replace Background
+- Remove Background
+- preview
+
+Missing optional image files at runtime produce a named placeholder plus warning, not a crash. Broken canonical references remain validation errors.
+
+## 7. Character authoring and Slice 2 placement
+
+The Character editor exposes enough of the existing canonical persona to support useful AI conversation:
 
 - display name;
 - description;
 - persona summary;
 - background;
-- personality list;
-- speech register;
-- speech notes;
+- personality;
+- speech register and notes;
 - values;
 - fears;
 - desires;
 - secrets;
-- initial location where supported by current schema;
-- visual identity / active sprite;
-- sprite framing: Full Body or Two Thirds.
+- initial Location;
+- active Character sprite;
+- sprite framing.
 
-The Character editor adds:
+No second AI character-card format is persisted.
 
-- Import Sprite;
-- Replace Sprite;
-- Remove Sprite;
-- sprite preview;
-- framing selector.
+At playtest start, each Character's playtest-local Location is initialized from `initial_location_ref`. Slice 2 contains no autonomous movement, so NPCs stay in that Location for the session unless a deterministic authored navigation capability is deliberately added in a later slice. When the player's current Location changes, the stage shows Characters whose playtest-local Location equals the current Location.
 
-No separate SillyTavern-style character card is persisted. Runtime AI uses the canonical Character definition.
-
-## 7. Location authoring changes
+## 8. Location authoring
 
 The Location editor adds:
 
 - background import/replace/remove;
 - background preview;
-- logical destination selection from other Locations;
-- optional starter/runtime entry location selection at the appropriate project/dialogue level.
+- logical Destination selection using `destination_refs`.
 
-Locations remain logical VN screens. No authored coordinates, navigation mesh, walking animation, or tilemap is introduced.
+Project Dashboard/Playtest settings expose Start Location and Entry Scene.
 
-## 8. Dialogue schema family
+Locations remain logical VN screens: no coordinates, pathfinding graph, tilemap, navigation mesh, or walking animation.
 
-### 8.1 New canonical schema family
-
-Slice 2 adds a first-class `schemas/v1/dialogue/` family rather than storing story text in free-form extensions.
-
-Minimum contracts:
-
-- dialogue scene definition;
-- dialogue entry definition or discriminated entry union;
-- dialogue choice option;
-- dialogue scene/reference types as required by validation.
-
-All contracts follow existing Draft 2020-12, strict-core, stable-ID rules.
-
-### 8.2 Dialogue scene model
+## 9. Dialogue scene model
 
 A scene contains:
 
@@ -268,13 +243,12 @@ A scene contains:
 schema identity/version
 immutable scene ID
 display name
-optional starting Location ref
-input mode: free | choices_only
-entry point
+input_mode: free | choices_only
+entry_point
 entries[]
 ```
 
-Supported entry kinds in Slice 2:
+Supported entries:
 
 1. `line`
    - immutable entry ID
@@ -291,455 +265,356 @@ Supported entry kinds in Slice 2:
    - immutable entry ID
    - optional prompt
    - ordered options
-   - each option has display label and target
+   - each option has label + target
 
-Targets reference immutable entry IDs or immutable scene IDs as explicitly defined by the schema. Array positions are never branch identity.
+Targets use immutable IDs, never array positions or display names. Cross-scene targets are explicit typed references. Cycles are allowed because repeated conversation loops may be intentional.
 
-### 8.3 Validation
+Semantic validation detects missing speakers, missing scene/entry targets, duplicate IDs, invalid entry points, malformed input modes, and unsupported entry kinds.
 
-Project-wide semantic validation must detect at least:
+## 10. Dialogue Creator workspace
 
-- missing speaker refs;
-- missing starting Location refs;
-- missing scene/entry targets;
-- duplicate IDs;
-- invalid entry-point target;
-- impossible/invalid choice target shape;
-- malformed `input_mode`;
-- unsupported dialogue entry kind.
+The existing disabled Dialogue navigation item becomes active.
 
-Cycles are allowed because repeatable conversation structures may be intentional; validation must not reject a cycle merely for being cyclic.
-
-## 9. Dialogue Creator workspace
-
-The previously disabled Dialogue navigation item becomes active.
-
-The Slice 2 UI is a form/list editor, not a visual graph.
-
-Recommended information architecture:
+The UI is a form/list editor:
 
 ```text
 Scene list
   -> selected Scene
        -> scene metadata / input mode
-       -> ordered entry list
-            -> Line / Narration / Choice editor
+       -> ordered entries
+            -> Line / Narration / Choice
 ```
 
 Capabilities:
 
 - create/rename/delete scene;
 - add/reorder/delete entries;
-- choose Character speaker from existing Character definitions;
+- select speaker from Characters;
 - edit line/narration text;
 - add/remove/reorder choice options;
-- select jump target from known scene/entry targets;
-- show validation error close to the affected field;
-- preserve immutable IDs when display names change.
+- select branch targets from valid immutable targets;
+- show validation errors at the affected field;
+- preserve immutable IDs when names change.
 
-No node graph, condition scripting, or event effects are included in Slice 2 dialogue authoring.
+No node graph, condition scripting, or event-effect authoring is added here.
 
-## 10. Godot runtime presentation
+## 11. Godot runtime UX
 
-### 10.1 Stage composition
-
-The runtime uses a modern VN/life-sim screen:
+The packaged runtime renders:
 
 - full-window Location background;
 - layered Character sprites;
-- bottom translucent dialogue/narration panel;
-- speaker name;
-- dialogue/narration text;
-- authored choice buttons when present;
-- free-text input when current conversation/scene allows it;
-- compact Location menu;
+- translucent bottom dialogue/narration panel;
+- speaker name and text;
+- authored choice buttons;
+- free-text input when allowed;
+- compact Locations menu;
 - History panel;
-- unobtrusive runtime/AI connection status.
+- unobtrusive runtime/AI status.
 
-One polished default theme is used through semantic theme tokens from the parent design.
+### 11.1 Sprite staging
 
-### 10.2 Character sprite staging
+Character art is always treated as a sprite, never a portrait.
 
-Default visual behavior:
+- `full_body` preserves head-to-feet composition where supplied.
+- `two_thirds` targets roughly head-to-knees composition.
+- Runtime preserves aspect ratio.
+- Runtime does not auto-crop full-body art to a bust.
+- One Character may render larger.
+- Multiple Characters scale down modestly to fit.
+- Sprites anchor toward the lower stage so they feel grounded.
+- Current speaker may receive subtle scale/opacity/z-order emphasis without changing framing.
 
-- one Character: larger stage presence;
-- multiple Characters: scale down enough to fit without portrait-style cropping;
-- preserve Full Body or Two Thirds framing;
-- preserve image aspect ratio;
-- favor lower-stage anchoring so sprites appear grounded;
-- current speaker may be emphasized through subtle scale/opacity/z-order treatment.
+### 11.2 Navigation
 
-### 10.3 Location navigation
+The Locations menu lists current Location `destination_refs`. Selecting one changes the player's current logical Location, background, and visible Character set, then emits structured runtime state telemetry. No walking animation occurs.
 
-A compact Location menu presents valid logical destinations supplied by project definitions.
+## 12. Authored dialogue runtime
 
-Changing Location:
+Runtime can:
 
-- updates current Location;
-- changes background;
-- updates staged Characters according to current Slice 2 placement rules;
-- emits structured runtime state/log telemetry.
-
-Slice 2 does not animate walking between screens.
-
-## 11. Authored dialogue runtime
-
-The runtime can:
-
-- start a configured/default authored scene;
-- render line and narration entries;
-- follow `next` targets;
-- present choice options;
+- start the configured Entry Scene;
+- render lines and narration;
+- follow next targets;
+- present choices;
 - jump to selected targets;
 - end a scene cleanly;
-- retain presented authored lines in local playtest History.
+- keep current-session authored and AI lines in History.
 
-If a scene uses `choices_only`, free-text input is hidden/disabled until authored flow returns to a free-input context.
+A `choices_only` scene hides/disables free text for that scene.
 
-## 12. Live AI dialogue
+## 13. Active NPC and free-text conversation
 
-### 12.1 Scope rule
+Free-text input always targets one active NPC.
 
-AI generates speech only.
+Selection rules:
 
-A valid AI result in Slice 2 is equivalent to:
+1. The most recent authored Character speaker becomes the active NPC when eligible.
+2. The player can click/select a visible Character sprite/name to make that Character active.
+3. If no visible eligible NPC is active, free-text input is disabled with a clear prompt to select a Character.
+
+The active NPC must be present in the current Location.
+
+## 14. Live AI dialogue
+
+### 14.1 Speech-only boundary
+
+A Slice 2 AI result contains only:
 
 ```text
 speaker_ref
 text
 ```
 
-It contains no engine effects and cannot request runtime mutation.
+Tool calls, action requests, world-state patches, ChangeSets, or other mutation instructions are unsupported. The adapter discards/rejects unsupported structure and never forwards it as an executable runtime command.
 
-If a provider response contains tool calls, JSON actions, state mutations, or other unsupported structure, the adapter ignores/rejects those parts and returns only validated plain speech when safe to do so; otherwise the request fails non-destructively.
+### 14.2 Bounded AI context
 
-### 12.2 Context supplied to AI
-
-The bounded context for a reply contains only information available to Slice 2:
+Each request may contain only:
 
 - selected NPC canonical Character persona;
-- project premise;
+- project premise from existing Creator project metadata;
 - current Location name/description;
-- current authored scene context when applicable;
+- current authored scene context if applicable;
 - bounded recent conversation turns;
 - current player message;
-- explicit runtime instruction that output is dialogue speech only.
+- system instruction that output is dialogue speech only.
 
-No invented memories, needs, relationship deltas, hidden world truth, goals, plans, or autonomous cognition are fabricated as if those systems already existed.
+Slice 2 does not fabricate future memory, need, relationship, goal, plan, or world-truth systems merely for prompting.
 
-### 12.3 Conversation history
+Character secrets are private model context, not instructions to reveal them. The model is prompted to treat them as character knowledge that may or may not be disclosed naturally.
 
-Slice 2 keeps an in-memory bounded recent-turn buffer per playtest conversation. It exists to provide conversational continuity only.
+### 14.3 Temporary conversation continuity
 
-It is not promoted to canonical Memory or persistent runtime cognition state.
+Recent turns are kept in a bounded in-memory playtest buffer. This provides continuity only; it is not canonical Memory/Belief state and is discarded when playtest ends.
 
-Stopping playtest discards this temporary AI conversation buffer unless a later slice explicitly defines runtime saves/history persistence.
-
-### 12.4 Free-text behavior
-
-Free-text input is available by default during normal NPC conversation.
-
-Sending a message:
+### 14.4 Request flow
 
 ```text
-Godot validates local input
- -> dialogue.request over bridge
- -> Creator validates session/request
- -> Creator builds bounded provider prompt
- -> native OpenRouter adapter calls provider
- -> response normalized to speech text
- -> dialogue.response over bridge
- -> Godot renders line + adds to History
+Player sends text in Godot
+ -> Godot validates local input
+ -> dialogue.request
+ -> Rust gateway validates session and active Character
+ -> Creator builds bounded provider context
+ -> OpenRouter adapter calls provider
+ -> response normalized to plain speech
+ -> dialogue.response
+ -> Godot renders response + appends History
 ```
 
-The UI must prevent accidental duplicate sends while the same request is in flight, while still allowing cancellation/timeout recovery.
+The runtime prevents duplicate sends for the same in-flight request and recovers from timeout/cancellation without locking the input permanently.
 
-## 13. OpenRouter configuration and credentials
+## 15. Existing AI profiles and OpenRouter credentials
 
-### 13.1 Machine-local settings
+Slice 2 reuses the existing canonical AI configuration instead of inventing a second model-setting system.
 
-Slice 2 adds Creator settings for:
+Project data uses:
 
-- OpenRouter API key;
-- OpenRouter model identifier;
-- optional conservative response parameters supported by the adapter.
+- `provider-profile` for provider adapter/capabilities/non-secret provider configuration;
+- `ai-role-profile` for model candidates, context policy, cost/latency settings, and an empty tool allowlist for Slice 2 dialogue;
+- `project-manifest.default_ai_profiles.npc_dialogue` to select the default dialogue role profile.
 
-These are Creator-machine settings, not project definitions.
+The initial Creator flow can create/configure a minimal OpenRouter provider profile and NPC Dialogue role profile.
 
-The API key is never written to project files, runtime logs, bridge payloads, generated prompts, or exported debug data.
+The OpenRouter API key is different: it is a Creator-machine credential, never project data. The Rust backend stores/reads it through the platform credential boundary and never logs or sends it to Godot.
 
-The model identifier may be stored as a non-secret machine-local preference. AI conversation remains disabled until both a usable credential and model identifier are configured.
+AI dialogue is unavailable until a valid NPC Dialogue role profile and machine-local OpenRouter credential are configured.
 
-### 13.2 Documentation-first adapter rule
+Immediately before production adapter implementation, the implementation session must verify the current official OpenRouter request/response contract rather than relying on stale chat assumptions.
 
-Immediately before implementation of the production OpenRouter adapter, the implementation session must verify the current official OpenRouter API contract rather than relying on stale chat assumptions.
+## 16. Play flow
 
-Provider-specific request/response details remain inside the adapter boundary.
-
-### 13.3 Failure behavior
-
-OpenRouter failure is non-fatal.
-
-On timeout, authentication error, rate limit, provider/model failure, malformed response, or network loss:
-
-- authored dialogue continues;
-- Location navigation continues;
-- free-text AI input shows an actionable error/retry state;
-- no canonical project data changes;
-- runtime remains open;
-- logs redact secrets.
-
-## 14. Play flow
-
-Pressing Play performs:
+Pressing Play:
 
 ```text
 Validate project
- -> Save current Creator edits
+ -> Save current edits
+ -> resolve Start Location / optional Entry Scene
  -> create playtest session
- -> start localhost bridge
+ -> start loopback bridge
  -> launch packaged Godot runtime
  -> runtime authenticates
  -> Creator accepts session
- -> Creator sends exact project/session load instruction
- -> Godot loads project
- -> Godot sends project.loaded + runtime.ready
- -> Creator marks Runtime: Running
+ -> send exact project/session load request
+ -> Godot loads saved project snapshot
+ -> project.loaded + runtime.ready
+ -> Creator shows Runtime: Running
 ```
 
-Play is blocked when project data required by the runtime is structurally or semantically invalid.
+Play loads the saved snapshot. Edits made after launch do not hot-reload; restart Play to load them.
 
-Missing optional visual files may degrade to placeholders, but malformed canonical references or dialogue branch targets block Play.
+Malformed canonical references or dialogue branches block Play. Missing image files may degrade to placeholders at runtime.
 
-## 15. Creator runtime status UI
+## 17. Creator runtime status and logs
 
-The Creator gains a compact runtime status surface showing at least:
+Creator shows at least:
 
 ```text
 Runtime: Idle | Launching | Running | Failed | Exited
-Session ID (abbreviated)
-Current Location when reported
+Session: abbreviated ID
+Location: current Location when reported
 AI: Not Configured | Ready | Requesting | Error
 
 Stop Playtest
 Open Logs
 ```
 
-The Creator remains usable while the runtime is open, subject to safeguards against edits that would make the currently running project snapshot ambiguous. Slice 2 may define Play as loading a saved snapshot and require another Play/reload to pick up later edits rather than hot-reloading definitions.
+Structured runtime logs include timestamp, severity, session ID, subsystem, message, and optional non-secret context.
 
-Hot reload is not required.
+Slice 2 telemetry is limited to current Location, active scene/entry, active conversation Character, bridge state, and last runtime error. Full simulation debug remains later work.
 
-## 16. Runtime logs and telemetry
+## 18. Failure handling
 
-Structured runtime logs are visible in the Creator.
+Invalid project:
+- Creator stays editable.
+- Play is blocked with precise reference/branch errors.
 
-Minimum fields:
+Runtime launch/load failure:
+- Creator stays open.
+- session becomes Failed.
+- structured error/log context remains available.
 
-- timestamp;
-- severity;
-- session ID;
-- subsystem;
-- message;
-- optional structured non-secret context.
-
-Runtime state telemetry in Slice 2 is intentionally small:
-
-- current Location;
-- active authored scene/entry when applicable;
-- active conversation Character when applicable;
-- bridge state;
-- last runtime error.
-
-Full debug state for needs, goals, memories, actions, and events remains Slice 3+ work.
-
-## 17. Failure handling
-
-### 17.1 Invalid project
-
-- Creator remains editable.
-- Play is blocked.
-- Validation identifies the failing definition/reference/branch.
-
-### 17.2 Runtime launch failure
-
-- Creator remains open.
-- Session transitions to Failed.
-- User receives structured error/log details.
-
-### 17.3 Runtime crash or unexpected exit
-
-- Creator remains open.
-- Session transitions to Exited/Failed.
-- last logs remain available.
+Runtime crash/exit:
+- Creator stays open.
 - project definitions remain untouched.
+- logs remain available.
 
-### 17.4 Bridge disconnect
+Bridge disconnect:
+- already-loaded authored content can continue where possible.
+- live AI becomes unavailable.
+- runtime never falls back to direct provider access.
 
-Runtime continues displaying already-loaded authored content where possible.
+OpenRouter failure:
+- authored dialogue and navigation continue.
+- AI request shows retryable non-destructive error.
+- secrets remain redacted.
 
-Live AI conversation becomes unavailable and displays a non-fatal connection state. No automatic insecure fallback to direct provider access is allowed.
+Missing image file:
+- named placeholder renders.
+- warning is logged.
 
-### 17.5 Missing imported file
+## 19. Testing strategy
 
-- runtime substitutes the correct named placeholder;
-- runtime emits a warning;
-- Creator can repair the asset on the next authoring pass.
+All existing schema, frontend, Rust, fixture-parity, and build checks remain mandatory.
 
-### 17.6 AI provider failure
+Add tests for:
 
-- authored content continues;
-- AI request can be retried;
-- no state mutation occurs.
-
-## 18. Testing strategy
-
-### 18.1 Existing verification remains mandatory
-
-All existing schema, Creator frontend, Rust, and build checks must remain green.
-
-### 18.2 Dialogue schema tests
-
-Add valid/invalid fixtures for:
-
+Dialogue contracts:
 - minimal valid scene;
-- line/narration/choice entries;
-- missing Character ref;
-- missing Location ref;
-- missing entry target;
-- missing scene target;
+- line/narration/choice;
+- missing Character/target;
 - duplicate IDs;
-- invalid entry point;
-- allowed cycle;
-- invalid input mode;
-- unsupported entry kind.
+- invalid entry point/input mode/kind;
+- allowed cycle.
 
-### 18.3 Asset import tests
+Asset import:
+- source copied into project;
+- persisted path is project-relative;
+- content hash stored;
+- Character/Location identity and active variant linkage;
+- replace/remove;
+- filename collision handling;
+- PNG/WebP/JPEG validation;
+- framing persistence;
+- missing-file placeholder.
 
-Cover:
+Manifest/Location additive compatibility:
+- old Slice 1 documents stay valid;
+- playtest settings validate;
+- destination refs validate semantically.
 
-- source file copied into project;
-- project-relative persisted path only;
-- Character sprite Asset Identity/variant linkage;
-- Location background linkage;
-- replace/remove behavior;
-- duplicate filename collision handling;
-- allowed file-type validation;
-- framing enum preservation;
-- missing-file placeholder behavior.
-
-### 18.4 Bridge/native tests
-
-Cover:
-
-- loopback-only bind;
-- random session secret/session ID;
+Bridge/native:
+- loopback bind;
+- random session credentials;
 - unauthorized hello rejected;
-- wrong protocol version rejected;
-- malformed envelope rejected;
+- wrong protocol rejected;
+- malformed/oversized/unknown messages rejected;
 - ready/load-error/log/exit lifecycle;
-- child process exit handling;
-- message size/type restrictions;
-- fake runtime integration.
+- child process exit;
+- fake runtime end-to-end.
 
-### 18.5 OpenRouter adapter tests
-
-Use deterministic mocks/fakes; CI must not require a real key.
-
-Cover:
-
-- credential never appears in bridge payloads/logs;
-- bounded context construction;
+OpenRouter adapter with deterministic mocks only:
+- credential redaction;
+- canonical role/profile resolution;
+- bounded context;
+- empty tool allowlist;
 - speech-only normalization;
-- unsupported tool/action response rejected/ignored safely;
-- timeout/auth/rate/provider errors;
-- cancellation/in-flight request handling;
-- malformed provider response.
+- malformed/tool/action response handling;
+- timeout/auth/rate/provider failure;
+- cancellation and in-flight state.
 
-### 18.6 Godot headless/runtime tests
-
-Where practical, headless tests cover:
-
+Godot/headless where practical:
 - project load;
-- asset path resolution;
-- scene entry traversal;
-- choice branching;
+- project-relative asset resolution;
+- scene traversal;
+- branching choice;
 - scene end;
-- `choices_only` input gating;
-- free-input request creation;
+- `choices_only` gating;
+- active NPC selection state;
+- free-text request creation;
 - placeholder fallback;
-- runtime bridge message parsing.
+- bridge parser.
 
-### 18.7 Windows hosted verification
+Windows hosted CI must build/package both the Creator and exported Godot playtest runtime into one downloadable artifact. CI must not require a real OpenRouter key.
 
-CI must build/package:
+## 20. Definition of done
 
-- Creator executable;
-- Godot playtest runtime required by the Creator package;
-- a downloadable Windows artifact containing everything required to run Slice 2 on a supported Windows machine, apart from standard platform prerequisites such as WebView2.
+A fresh Windows package must support this end-to-end flow:
 
-Hosted smoke verification should prove the Creator can launch the packaged runtime through the actual process boundary, even if full GUI automation remains limited.
-
-## 19. Definition of done
-
-Slice 2 is complete only when a fresh Windows package allows the following end-to-end flow:
-
-1. Open or create a project in Creator.
-2. Create at least one Character.
-3. Fill useful persona/speech fields.
-4. Import a Character sprite and choose Full Body or Two Thirds framing.
-5. Create at least one Location.
-6. Import a Location background.
-7. Author a dialogue scene with lines and at least one branching choice.
-8. Configure machine-local OpenRouter key and model identifier.
-9. Press Play.
-10. Creator validates and saves.
-11. A separate packaged Godot runtime launches.
-12. Runtime authenticates to the Creator bridge and loads the exact project.
-13. Location background and Character sprite display in VN staging.
+1. Create/open a project.
+2. Create a Character and fill useful persona/speech fields.
+3. Import a Character sprite.
+4. Choose Full Body or Two Thirds framing.
+5. Create a Location and import a background.
+6. Configure logical destinations and Playtest Start Location.
+7. Author a scene with lines and at least one branching choice.
+8. Set it as Entry Scene.
+9. Configure an OpenRouter provider/AI role profile and machine-local API key.
+10. Press Play.
+11. Creator validates/saves and launches the packaged Godot runtime.
+12. Runtime authenticates and loads the exact saved project.
+13. Background and sprite render with correct VN staging/framing.
 14. Authored dialogue advances and choices branch correctly.
-15. Free-text input is available in a free-input context.
-16. Player sends natural-language text to the NPC.
-17. NPC responds in character through the Creator-owned OpenRouter gateway.
-18. AI response is rendered as speech only and does not mutate game/project state.
-19. Location menu changes logical Location/background without top-down movement.
-20. History shows authored and AI dialogue from the current playtest.
+15. Location navigation changes the logical screen without top-down movement.
+16. A visible NPC can be selected as active conversation target.
+17. Free-text input sends natural language to that NPC.
+18. NPC replies in character through Creator-owned OpenRouter gateway.
+19. AI reply is speech only and cannot mutate project/runtime systems.
+20. History includes authored and AI dialogue for the current session.
 21. OpenRouter failure leaves authored playtest functional.
-22. Closing/stopping runtime returns Creator to an idle/exited state with logs available.
+22. Stop/close runtime returns Creator to idle/exited state with logs.
 
-## 20. Explicitly out of scope
-
-Slice 2 does not include:
+## 21. Explicitly out of scope
 
 - portrait-mode Character art;
 - AI image generation;
-- TTS or voice playback;
+- TTS/voice;
 - autonomous NPC goals/plans;
 - needs simulation;
 - relationship mutation;
 - persistent Memory/Belief updates;
-- inventory/systemic item actions;
-- runtime AI tool/action requests;
-- event execution beyond what is strictly required for authored dialogue traversal;
+- inventory or systemic item actions;
+- runtime AI tools/actions;
+- full event execution system;
 - persistent runtime saves;
 - multiplayer/network gameplay;
-- top-down movement;
-- pathfinding;
+- top-down movement/pathfinding;
 - animation authoring;
 - node-graph dialogue editor;
-- hot reload requirement;
-- standalone exported game `.exe` workflow.
+- hot reload;
+- standalone exported game workflow.
 
-## 21. Implementation sequencing guidance
+## 22. Implementation sequencing guidance
 
-The implementation plan should keep the repository working at each checkpoint and should prefer these dependency boundaries:
+The implementation plan should preserve a working repository at each checkpoint and follow these dependency boundaries:
 
-1. canonical dialogue contracts + semantic validation;
-2. native self-contained asset import + Creator visual editing;
-3. bridge protocol + fake runtime + Tauri lifecycle gateway;
-4. Godot runtime scaffold/project loader;
-5. VN stage + authored dialogue traversal + Location navigation;
-6. Creator Dialogue workspace + Play/runtime status/log UI;
-7. native OpenRouter configuration/adapter + speech-only runtime requests;
-8. Windows packaging and end-to-end hardening.
+1. additive schema changes + dialogue contracts + semantic validation;
+2. self-contained asset import + Character/Location visual editing;
+3. bridge protocol + fake runtime + Rust lifecycle gateway;
+4. packaged Godot runtime scaffold/project loader;
+5. VN stage + Location navigation + authored dialogue traversal;
+6. Dialogue workspace + Play/runtime status/log UI;
+7. existing AI profile wiring + secure OpenRouter adapter + speech-only requests;
+8. Windows packaging + end-to-end hardening.
 
-The implementation plan may split tasks more finely, but must not reorder work in a way that requires unvalidated provider/network behavior before the bridge and deterministic authored runtime are proven.
+Provider/network behavior must not become a prerequisite for proving the deterministic bridge and authored runtime.
