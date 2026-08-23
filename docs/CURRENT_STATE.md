@@ -13,7 +13,7 @@ PR: `#3 feat: implement canonical schema registry and validation`
 
 ## Current objective
 
-Finish THE-6 by obtaining green GitHub CI on PR #3 and completing the final requirements/diff review. Merge only after both gates are clean. Then begin THE-7: the Snowed In vertical-slice specification.
+PR #3 has passed the THE-6 implementation, CI, and final requirements/diff audit. The remaining gate is explicit integration approval to merge PR #3. After merge, mark THE-6 Done and begin THE-7: the Snowed In vertical-slice specification.
 
 ## Completed
 
@@ -31,7 +31,7 @@ Finish THE-6 by obtaining green GitHub CI on PR #3 and completing the final requ
 - Structural and semantic fixture suites implemented.
 - Semantic validation checks duplicate IDs, missing definition refs, registered executors/effects/parameter schemas/extensions, relationship range/default correctness, relationship runtime values, ChangeSet duplicate operation IDs, missing dependencies, and dependency cycles.
 - Semantic validation skips deeper semantic assumptions for structurally invalid documents instead of crashing.
-- GitHub Actions schema-validation workflow added.
+- GitHub Actions schema-validation workflow added and independently green on the current PR head.
 
 ## Runtime status
 
@@ -39,20 +39,35 @@ No gameplay runtime implementation exists yet. This is intentional. THE-6 is con
 
 ## Verification evidence
 
-Fresh local verification after the final review-hardening changes:
+Fresh GitHub Actions verification on PR #3 head `87c3596c08ca0e40ad3c37a187fc3aa1ab28a5ef`:
 
 ```text
+Schema Validation workflow #25 / run 32624893447
+Conclusion: success
+Python: 3.12.14
+jsonschema: 4.26.0
+
 python -m unittest discover -s tests -p 'test_*.py' -v
 23 tests, 0 failures
 
 python tools/schema_validation/validate_fixtures.py
 59 fixture cases, 0 mismatches
+```
 
+Every workflow step completed successfully: checkout, Python setup, dependency installation, unit tests, and fixture validation.
+
+Local final hardening also ran:
+
+```text
 python -m compileall -q tools tests
 exit 0
 ```
 
-The first GitHub Actions run on PR #3 failed before tests because `actions/setup-python` cache auto-detection looked for `requirements.txt`/`pyproject.toml` instead of this repo's `requirements-dev.txt`. The workflow was corrected with `cache-dependency-path: requirements-dev.txt`. A new GitHub CI run on the current PR head is required before THE-6 can be called complete.
+## Final THE-6 audit
+
+THE-6 Linear acceptance requires Character, Controller, WorldEntity/Location/Room/Object/Item, Affordance, Action, Activity, Event/Trigger/Condition/Effect, Perception, Knowledge/Belief, Memory, Relationship, AI Provider, Copilot ChangeSet, and Asset Identity/Provenance contracts, with examples, validation rules, stable IDs, versioning, cross-references, and CI-ready fixtures.
+
+Final PR #3 changed-file audit confirms all required schema families are present, plus schema registry, positive/negative structural fixtures, semantic fixtures, validator tooling, tests, documentation, and CI. The temporary bundle experiment is absent from the final diff. There are no unresolved GitHub review threads.
 
 ## Review hardening completed
 
@@ -62,13 +77,16 @@ PR review found and fixed these additional issues before merge:
 - Action/Activity parameter schema URNs were not verified against the registry;
 - relationship dimension `min/max/default` semantics were not checked;
 - duplicate ChangeSet operation IDs were not rejected;
-- secret-key filtering was only top-level and also incorrectly rejected legitimate names containing `token` such as `max_tokens`.
+- secret-key filtering was only top-level and also incorrectly rejected legitimate names containing `token` such as `max_tokens`;
+- direct CLI execution initially had an import-path packaging failure;
+- asset variants required their own reference contract rather than ordinary DefinitionRefs;
+- generic WorldEntityDefinition and registry-dispatch coverage were added after tests exposed gaps.
 
 Each fix has regression coverage.
 
 ## Known blockers
 
-No design/code blocker is known. The only remaining gate is green GitHub CI plus final PR review evidence.
+No THE-6 design, code, test, CI, or review blocker remains. The only remaining gate is explicit merge approval.
 
 ## Accepted architecture decisions
 
@@ -90,9 +108,9 @@ No design/code blocker is known. The only remaining gate is green GitHub CI plus
 
 ## Next three concrete tasks
 
-1. Require green GitHub CI on current PR #3 head and finish the PR requirements/diff audit.
-2. Merge THE-6 only after approval of the integration step; then mark Linear THE-6 Done.
-3. Start Linear THE-7 and write the Snowed In vertical-slice specification.
+1. Merge PR #3 after explicit integration approval and mark Linear THE-6 Done.
+2. Start Linear THE-7 on a fresh branch from updated `main`.
+3. Write and review the Snowed In vertical-slice specification before broad Godot runtime implementation.
 
 ## Still unresolved before substantial runtime implementation
 
