@@ -14,6 +14,7 @@ jobs:
         with:
           python-version: '3.12'
           cache: pip
+          # The project intentionally keeps schema tooling dependencies separate from runtime dependencies.
           cache-dependency-path: requirements-dev.txt
       - name: Install development dependencies
         run: pip install -r requirements-dev.txt
