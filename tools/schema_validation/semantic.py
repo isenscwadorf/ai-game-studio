@@ -63,11 +63,12 @@ class SemanticValidator:
         definitions = project.get("definitions", [])
         by_id = {}
         duplicates = set()
+        valid_definitions = []
 
         for i, definition in enumerate(definitions):
             try:
-                structural = self.registry.validate_document(definition)
-            except (KeyError, ValueError) as exc:
+                structural = list(self.registry.validate_document(definition))
+            except (KeyError, ValueError, AttributeError) as exc:
                 errors.append(error("SCHEMA_UNKNOWN", str(exc), path=["definitions", i]))
                 continue
             for structural_error in structural:
@@ -83,6 +84,8 @@ class SemanticValidator:
                 if definition_id in by_id:
                     duplicates.add(definition_id)
                 by_id[definition_id] = definition
+            if not structural:
+                valid_definitions.append(definition)
 
         for definition_id in sorted(duplicates):
             errors.append(error(
@@ -92,7 +95,7 @@ class SemanticValidator:
                 details={"id": definition_id},
             ))
 
-        for definition in definitions:
+        for definition in valid_definitions:
             object_id = definition.get("id")
             for path, ref in iter_definition_refs(definition):
                 if ref not in by_id:
@@ -104,7 +107,8 @@ class SemanticValidator:
                         details={"ref": ref},
                     ))
 
-        for definition in definitions:
+        valid_dimensions = {}
+        for definition in valid_definitions:
             sid = definition.get("schema_id")
             object_id = definition.get("id")
             if sid in {"aigs.action.definition", "aigs.activity.definition"}:
@@ -117,6 +121,15 @@ class SemanticValidator:
                         path=["executor_key"],
                         details={"executor_key": executor_key},
                     ))
+                parameter_schema = definition.get("parameters_schema_ref")
+                if parameter_schema and not self.registry.has_urn(parameter_schema):
+                    errors.append(error(
+                        "PARAMETER_SCHEMA_NOT_REGISTERED",
+                        f"Parameter schema {parameter_schema} is not registered.",
+                        object_id=object_id,
+                        path=["parameters_schema_ref"],
+                        details={"urn": parameter_schema},
+                    ))
             if sid == "aigs.event.definition":
                 for index, effect in enumerate(definition.get("effects", [])):
                     if effect.get("effect_type") not in CORE_EFFECTS:
@@ -127,6 +140,26 @@ class SemanticValidator:
                             path=["effects", index, "effect_type"],
                             details={"effect_type": effect.get("effect_type")},
                         ))
+            if sid == "aigs.relationship_dimension.definition":
+                bounds = definition["range"]
+                if bounds["min"] > bounds["max"]:
+                    errors.append(error(
+                        "RELATIONSHIP_RANGE_INVALID",
+                        f"Relationship range min {bounds['min']} exceeds max {bounds['max']}.",
+                        object_id=object_id,
+                        path=["range"],
+                        details=bounds,
+                    ))
+                else:
+                    if bounds["default"] < bounds["min"] or bounds["default"] > bounds["max"]:
+                        errors.append(error(
+                            "RELATIONSHIP_DEFAULT_OUT_OF_RANGE",
+                            f"Relationship default {bounds['default']} is outside [{bounds['min']}, {bounds['max']}].",
+                            object_id=object_id,
+                            path=["range", "default"],
+                            details=bounds,
+                        ))
+                    valid_dimensions[object_id] = definition
             for namespace in definition.get("extensions", {}):
                 if namespace not in CORE_EXTENSION_NAMESPACES:
                     errors.append(error(
@@ -137,15 +170,14 @@ class SemanticValidator:
                         details={"namespace": namespace},
                     ))
 
-        dimensions = {
-            d["id"]: d
-            for d in definitions
-            if d.get("schema_id") == "aigs.relationship_dimension.definition" and d.get("id")
-        }
         for state in project.get("runtime_documents", []):
-            if state.get("schema_id") != "aigs.relationship.state":
+            if not isinstance(state, dict) or state.get("schema_id") != "aigs.relationship.state":
                 continue
-            structural = self.registry.validate_document(state)
+            try:
+                structural = list(self.registry.validate_document(state))
+            except (KeyError, ValueError, AttributeError) as exc:
+                errors.append(error("SCHEMA_UNKNOWN", str(exc), path=["runtime_documents"]))
+                continue
             for structural_error in structural:
                 errors.append(error(
                     "STRUCTURAL_VALIDATION_FAILED",
@@ -153,16 +185,19 @@ class SemanticValidator:
                     object_id=state.get("relationship_id"),
                     path=["runtime_documents", *list(structural_error.absolute_path)],
                 ))
+            if structural:
+                continue
             for dim_id, value in state.get("dimension_values", {}).items():
-                dim = dimensions.get(dim_id)
+                dim = valid_dimensions.get(dim_id)
                 if not dim:
-                    errors.append(error(
-                        "REFERENCE_NOT_FOUND",
-                        f"Relationship dimension {dim_id} does not exist.",
-                        object_id=state.get("relationship_id"),
-                        path=["dimension_values", dim_id],
-                        details={"ref": dim_id},
-                    ))
+                    if dim_id not in by_id:
+                        errors.append(error(
+                            "REFERENCE_NOT_FOUND",
+                            f"Relationship dimension {dim_id} does not exist.",
+                            object_id=state.get("relationship_id"),
+                            path=["dimension_values", dim_id],
+                            details={"ref": dim_id},
+                        ))
                     continue
                 bounds = dim["range"]
                 if value < bounds["min"] or value > bounds["max"]:
@@ -175,7 +210,10 @@ class SemanticValidator:
                     ))
 
         for changeset in project.get("changesets", []):
-            errors.extend(self.validate_changeset(changeset))
+            if isinstance(changeset, dict):
+                errors.extend(self.validate_changeset(changeset))
+            else:
+                errors.append(error("STRUCTURAL_VALIDATION_FAILED", "ChangeSet must be an object."))
 
         errors.sort(key=lambda e: (e["code"], str(e.get("object_id")), str(e.get("path"))))
         return errors
@@ -183,8 +221,8 @@ class SemanticValidator:
     def validate_changeset(self, changeset: dict) -> list[dict]:
         errors = []
         try:
-            structural = self.registry.validate_document(changeset)
-        except (KeyError, ValueError) as exc:
+            structural = list(self.registry.validate_document(changeset))
+        except (KeyError, ValueError, AttributeError) as exc:
             return [error("SCHEMA_UNKNOWN", str(exc))]
         for structural_error in structural:
             errors.append(error(
@@ -193,8 +231,21 @@ class SemanticValidator:
                 object_id=changeset.get("changeset_id"),
                 path=list(structural_error.absolute_path),
             ))
+        if structural:
+            return errors
+
         operations = changeset.get("operations", [])
-        op_ids = [op.get("operation_id") for op in operations if op.get("operation_id")]
+        op_ids = [op["operation_id"] for op in operations]
+        duplicate_ids = sorted({op_id for op_id in op_ids if op_ids.count(op_id) > 1})
+        for op_id in duplicate_ids:
+            errors.append(error(
+                "CHANGESET_DUPLICATE_OPERATION_ID",
+                f"Operation ID {op_id} is duplicated.",
+                object_id=changeset.get("changeset_id"),
+                path=["operations"],
+                details={"operation_id": op_id},
+            ))
+
         known = set(op_ids)
         for op in operations:
             for dep in op.get("depends_on", []):
@@ -206,7 +257,7 @@ class SemanticValidator:
                         path=["operations", op.get("operation_id"), "depends_on"],
                     ))
 
-        graph = {op["operation_id"]: set(op.get("depends_on", [])) for op in operations if "operation_id" in op}
+        graph = {op["operation_id"]: set(op.get("depends_on", [])) for op in operations}
         visiting, visited = set(), set()
 
         def visit(node):

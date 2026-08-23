@@ -146,3 +146,16 @@ class FixtureValidationTests(unittest.TestCase):
         self.assertEqual(summary["mismatches"], 0)
         self.assertEqual(summary["total"], len(self.cases))
 
+    def test_provider_config_allows_nonsecret_token_settings(self):
+        case = next(case for case in self.cases if case["name"] == "valid_provider-profile")
+        instance = json.loads(json.dumps(case["instance"]))
+        instance["provider_config"] = {"max_tokens": 4096, "routing": "fallback"}
+        errors = list(self.registry.iter_errors(case["schema_urn"], instance))
+        self.assertEqual(errors, [])
+
+    def test_provider_config_rejects_nested_secret_keys(self):
+        case = next(case for case in self.cases if case["name"] == "valid_provider-profile")
+        instance = json.loads(json.dumps(case["instance"]))
+        instance["provider_config"] = {"routing": {"API_KEY": "must-not-be-persisted"}}
+        errors = list(self.registry.iter_errors(case["schema_urn"], instance))
+        self.assertTrue(errors)
