@@ -1,0 +1,1 @@
+{"$schema":"https://json-schema.org/draft/2020-12/schema","$id":"urn:aigs:schema:v1:effect-operation","type":"object","additionalProperties":false,"properties":{"effect_type":{"type":"string","pattern":"^[a-z][a-z0-9_]*(\\.[a-z0-9_-]+)+$"},"parameters":{"type":"object"}},"required":["effect_type","parameters"]}
