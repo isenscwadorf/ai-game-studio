@@ -8,9 +8,23 @@ The first proving game is **Snowed In**, a small autonomous family-house simulat
 
 ## Development status
 
-Current milestone: **M0 — Architecture Locked**.
+Current milestone: **Creator Foundation implementation (Slice 1)**.
 
-Substantial runtime implementation intentionally waits until the foundational contracts and first vertical-slice specification are precise enough to survive handoff between developers and AI agents.
+The repository now contains the locally reviewed Windows Creator Foundation:
+a Tauri/React editor for schema-backed local projects with basic Character and
+logical Location editing, validation-gated persistence, and guarded dirty
+project transitions. The local packaged release has reached its Home screen;
+its production project Open and Save validation paths have also been exercised
+with a disposable local project. Final hosted Windows packaging, artifact
+extraction/launch, native folder-picker interaction, and real GUI close flows
+remain review-gate work. This is not yet a playable Godot runtime or a
+standalone exported game.
+
+For Creator development and its supported flow, see
+[`apps/creator/README.md`](apps/creator/README.md). The canonical Creator MVP
+design and implementation plan live in
+[`docs/superpowers/specs/`](docs/superpowers/specs/) and
+[`docs/superpowers/plans/`](docs/superpowers/plans/).
 
 ## Start here
 

@@ -1,0 +1,42 @@
+{
+  "name": "ai-game-studio-creator",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "schemas:generate": "node scripts/generate-schema-catalog.mjs",
+    "schemas:check": "node scripts/generate-schema-catalog.mjs && git diff --exit-code -- src/generated/schemaCatalog.ts src/generated/schemaValidators.ts",
+    "verify": "npm run schemas:check && npm run test:runtime-interop && npm run test:native-schema && npm run test:run && npm run typecheck && npm run build",
+    "pretest:run": "npm run schemas:generate",
+    "test:run": "vitest run",
+    "test:runtime-interop": "node --test tests/ajvRuntimeInterop.native-test.mjs",
+    "test:native-schema": "node --test tests/schemaValidators.native-test.mjs",
+    "typecheck": "tsc --noEmit",
+    "prebuild": "npm run schemas:generate",
+    "build": "tsc --noEmit && vite build",
+    "tauri": "tauri"
+  },
+  "dependencies": {
+    "@tauri-apps/api": "2.11.1",
+    "@tauri-apps/plugin-dialog": "2.7.2",
+    "ajv": "8.20.0",
+    "ajv-formats": "3.0.1",
+    "react": "19.2.7",
+    "react-dom": "19.2.7"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "2.11.4",
+    "@testing-library/dom": "10.4.1",
+    "@testing-library/jest-dom": "6.8.0",
+    "@testing-library/react": "16.3.2",
+    "@testing-library/user-event": "^14.6.1",
+    "@types/react": "19.2.12",
+    "@types/react-dom": "19.2.3",
+    "@vitejs/plugin-react": "6.0.5",
+    "jsdom": "26.1.0",
+    "typescript": "6.0.3",
+    "vite": "8.1.0",
+    "vitest": "4.1.0"
+  }
+}
