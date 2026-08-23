@@ -10,8 +10,8 @@ Before changing code or architecture, read:
 2. `docs/CURRENT_STATE.md`
 3. `docs/PROJECT_CONSTITUTION.md`
 4. relevant files in `docs/DECISIONS/`
-5. active spec in `docs/specs/`
-6. active implementation plan in `docs/plans/`
+5. active spec in `docs/superpowers/specs/` (or `docs/specs/` for an older active stream)
+6. active implementation plan in `docs/superpowers/plans/` (or `docs/plans/` for an older active stream)
 
 Then inspect the current branch and run the documented fast verification commands.
 
