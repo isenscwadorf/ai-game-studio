@@ -6,26 +6,29 @@ Last updated: 2026-08-23
 
 **M0 — Architecture Locked**
 
-## Current branch
+## Current branch / review
 
-`bootstrap/project-memory`
+Branch: `bootstrap/project-memory`  
+PR: `#1 docs: establish durable project memory and architecture baseline`
 
 ## Current objective
 
-Establish durable repository memory and lock the foundational architecture before implementing runtime systems.
+Review and merge the durable repository-memory baseline, then move directly into canonical schema design and the Snowed In vertical-slice specification.
 
 ## Completed in this branch
 
-- Added project constitution.
-- Added mandatory AI-agent development/handoff rules.
-- Added `START_HERE.md` as the canonical entry point.
-- Established GitHub as permanent project memory and Linear as execution tracker.
-
-## In progress
-
-- Bootstrap remaining roadmap/glossary/ADR documents.
-- Define canonical schema contracts.
-- Specify Snowed In vertical slice.
+- Project constitution and product vision.
+- Mandatory AI-agent development/handoff rules.
+- `START_HERE.md` canonical entry point.
+- Architecture overview, roadmap, and glossary.
+- Contribution, security, and changelog baselines.
+- Durable documentation homes for schemas, systems, AI, testing, and handoff.
+- ADR-0001: shared Character model.
+- ADR-0002: autonomous Character agency.
+- ADR-0003: Actions vs Activities.
+- ADR-0004: provider-neutral AI adapters.
+- ADR-0005: World Truth vs Character beliefs.
+- GitHub/Linear linkage for repository-memory work.
 
 ## Runtime status
 
@@ -33,7 +36,7 @@ No game/runtime implementation exists yet. This is intentional. M0 is documentat
 
 ## Tests
 
-No test harness exists yet. The first implementation plan will include schema-validation proof and the initial automated test structure.
+No test harness exists yet. This PR is documentation-only. The first implementation plan will introduce schema validation and automated test structure before substantive runtime code.
 
 ## Known blockers
 
@@ -44,22 +47,22 @@ None currently.
 - Player and NPC share one Character model.
 - NPCs can initiate valid engine Actions autonomously.
 - Actions are atomic; Activities are explicitly interruptible.
-- World truth is separate from per-character knowledge and belief.
+- World Truth is separate from per-character knowledge and belief.
 - OpenRouter is the default LLM gateway behind a provider abstraction.
 - Inworld is optional behind an adapter/service boundary.
 - Godot is runtime infrastructure, not the creator-facing product UX.
 
 ## Next three concrete tasks
 
-1. Finish initial ADR set for accepted decisions.
-2. Write the M0 canonical schema specification.
-3. Write the Snowed In vertical-slice specification.
+1. Review/merge PR #1.
+2. Write the M0 canonical engine-schema specification (Linear THE-6).
+3. Write the Snowed In vertical-slice specification (Linear THE-7).
 
 ## Unresolved foundational decisions
 
 The following must be resolved in M0 before substantial implementation:
 
-- Exact Godot version pin at implementation start.
+- Exact Godot stable version pin at implementation start.
 - Exact canonical project-data serialization format and migration approach.
 - Whether the editor shell is implemented entirely inside Godot or uses a separate desktop UI layer around the Godot runtime.
 - Initial test framework/tooling for Godot and schema contracts.
