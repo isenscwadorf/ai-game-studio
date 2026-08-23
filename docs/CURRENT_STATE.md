@@ -8,39 +8,43 @@ Last updated: 2026-08-23
 
 ## Current branch / review
 
-Branch: `bootstrap/project-memory`  
-PR: `#1 docs: establish durable project memory and architecture baseline`
+Branch: `isenscwadorf/the-6-define-canonical-engine-schemas`
+PR: `#2 docs: define canonical engine schema design`
 
 ## Current objective
 
-Review and merge the durable repository-memory baseline, then move directly into canonical schema design and the Snowed In vertical-slice specification.
+Merge the approved THE-6 design/ADR/implementation-plan baseline, then implement the machine-readable schema registry and validation fixtures on a dedicated implementation branch using test-first development.
 
-## Completed in this branch
+## Completed
 
-- Project constitution and product vision.
-- Mandatory AI-agent development/handoff rules.
-- `START_HERE.md` canonical entry point.
-- Architecture overview, roadmap, and glossary.
-- Contribution, security, and changelog baselines.
-- Durable documentation homes for schemas, systems, AI, testing, and handoff.
-- ADR-0001: shared Character model.
-- ADR-0002: autonomous Character agency.
-- ADR-0003: Actions vs Activities.
-- ADR-0004: provider-neutral AI adapters.
-- ADR-0005: World Truth vs Character beliefs.
-- GitHub/Linear linkage for repository-memory work.
+- PR #1 merged: durable repository memory and architecture baseline.
+- Canonical schema design reviewed and approved by the project owner.
+- THE-6 implementation plan written.
+- ADR-0001 through ADR-0012 recorded, including:
+  - shared Character model;
+  - autonomous Character agency;
+  - Actions vs Activities;
+  - provider-neutral AI adapters;
+  - World Truth vs Character beliefs;
+  - strict JSON + JSON Schema 2020-12;
+  - Definition vs Runtime-State separation;
+  - stable IDs and explicit extensions;
+  - declarative/no-eval gameplay contracts;
+  - atomic Copilot ChangeSets;
+  - semantic asset identity/provenance;
+  - Godot 4.7.2 stable implementation pin.
 
 ## Runtime status
 
-No game/runtime implementation exists yet. This is intentional. M0 is documentation and contract design first.
+No gameplay runtime implementation exists yet. This is intentional. THE-6 implements data contracts and validation tooling only.
 
 ## Tests
 
-No test harness exists yet. This PR is documentation-only. The first implementation plan will introduce schema validation and automated test structure before substantive runtime code.
+No committed test harness exists yet. The approved THE-6 implementation plan requires tests/fixtures first, then the minimum validator/schema implementation to make them pass.
 
 ## Known blockers
 
-None currently.
+The general-purpose container cannot resolve external GitHub hosts, so GitHub checkout cannot be used there. Schema validation will be developed in an isolated local Python workspace using the same `jsonschema==4.26.0` dependency and then published to the implementation branch only after fresh RED/GREEN verification.
 
 ## Accepted architecture decisions
 
@@ -51,22 +55,26 @@ None currently.
 - OpenRouter is the default LLM gateway behind a provider abstraction.
 - Inworld is optional behind an adapter/service boundary.
 - Godot is runtime infrastructure, not the creator-facing product UX.
+- Canonical persisted definitions use strict UTF-8 JSON and JSON Schema Draft 2020-12.
+- Project Definitions and Runtime State are separate schema families.
+- Persistent definition IDs are immutable namespaced IDs; runtime instance IDs are opaque UUIDs.
+- Core schemas are strict; plugin extension payloads are explicit and namespaced.
+- Core Conditions/Effects are declarative and non-executable.
+- Copilot project changes use atomic typed ChangeSets with engine-generated undo receipts.
+- Generated assets use stable semantic identities and provenance.
+- Godot 4.7.2 stable is pinned for the initial runtime implementation baseline.
 
 ## Next three concrete tasks
 
-1. Review/merge PR #1.
-2. Write the M0 canonical engine-schema specification (Linear THE-6).
-3. Write the Snowed In vertical-slice specification (Linear THE-7).
+1. Merge PR #2.
+2. Create the THE-6 schema implementation branch and execute the test-first implementation plan.
+3. Open implementation PR with validation evidence; then begin THE-7 Snowed In specification.
 
-## Unresolved foundational decisions
+## Still unresolved before substantial runtime implementation
 
-The following must be resolved in M0 before substantial implementation:
-
-- Exact Godot stable version pin at implementation start.
-- Exact canonical project-data serialization format and migration approach.
-- Whether the editor shell is implemented entirely inside Godot or uses a separate desktop UI layer around the Godot runtime.
-- Initial test framework/tooling for Godot and schema contracts.
+- Whether the editor shell is entirely inside Godot or uses a separate desktop UI layer around the Godot runtime.
+- Exact Godot-side runtime validation/testing tooling beyond the schema CI harness.
 
 ## Handoff note
 
-Do not infer missing architecture from chat history. If information required for implementation is not in the repository, stop and document/resolve it before coding.
+Read `docs/START_HERE.md`, this file, ADR-0001 through ADR-0012, the active schema design spec, and `docs/plans/2026-08-23-the-6-schema-implementation-plan.md` before continuing. Do not add gameplay runtime behavior to THE-6.
