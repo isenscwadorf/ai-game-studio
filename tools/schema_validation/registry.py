@@ -15,16 +15,8 @@ class LocalSchemaRegistry:
         self.entries = registry_doc["schemas"]
         self._schemas = {}
         resources = []
-        cache = {}
         for entry in self.entries:
-            path = self.root / entry["path"]
-            if path not in cache:
-                cache[path] = json.loads(path.read_text(encoding="utf-8"))
-            document = cache[path]
-            if "resource_key" in entry:
-                schema = document["$defs"][entry["resource_key"]]
-            else:
-                schema = document
+            schema = json.loads((self.root / entry["path"]).read_text(encoding="utf-8"))
             if schema.get("$id") != entry["urn"]:
                 raise ValueError(f"Registry URN mismatch for {entry['urn']}")
             self._schemas[entry["urn"]] = schema

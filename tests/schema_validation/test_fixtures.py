@@ -6,7 +6,6 @@ from tools.schema_validation.registry import LocalSchemaRegistry
 
 ROOT = Path(__file__).resolve().parents[2]
 
-
 class FixtureValidationTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -42,7 +41,7 @@ class FixtureValidationTests(unittest.TestCase):
             "display_name": "Father",
             "tags": [],
             "extensions": {},
-            "unexpected_ai_hallucination": True,
+            "unexpected_ai_hallucination": True
         }
         errors = list(self.registry.iter_errors("urn:aigs:schema:v1:character-definition", instance))
         self.assertTrue(errors)
@@ -55,7 +54,7 @@ class FixtureValidationTests(unittest.TestCase):
             "definition_ref": {"ref": "character.father"},
             "location_instance_id": None,
             "active_activity_id": None,
-            "controller_binding_id": None,
+            "controller_binding_id": None
         }
         errors = list(self.registry.iter_errors("urn:aigs:schema:v1:character-state", instance))
         self.assertTrue(errors)
@@ -68,10 +67,35 @@ class FixtureValidationTests(unittest.TestCase):
             "definition_ref": {"ref": "character.father"},
             "location_instance_id": None,
             "active_activity_id": None,
-            "controller_binding_id": None,
+            "controller_binding_id": None
         }
         errors = list(self.registry.iter_errors("urn:aigs:schema:v1:character-state", instance))
         self.assertEqual(errors, [])
+
+    def test_validate_document_dispatches_all_valid_top_level_documents(self):
+        failures = []
+        nondispatchable = {
+            "valid_definition-ref",
+            "valid_runtime-instance-ref",
+            "valid_entity-handle",
+            "valid_condition-expression",
+            "valid_trigger-definition",
+            "valid_effect-operation",
+            "valid_fact",
+            "valid_validation-error",
+        }
+        for case in self.cases:
+            if not case["valid"] or case["name"] in nondispatchable:
+                continue
+            instance = case["instance"]
+            try:
+                errors = self.registry.validate_document(instance)
+            except Exception as exc:
+                failures.append({"name": case["name"], "error": repr(exc)})
+                continue
+            if errors:
+                failures.append({"name": case["name"], "errors": [e.message for e in errors[:3]]})
+        self.assertEqual(failures, [])
 
     def test_invalid_fixtures_declare_and_hit_expected_validation_keyword(self):
         failures = []
@@ -87,6 +111,13 @@ class FixtureValidationTests(unittest.TestCase):
             if expected not in validators:
                 failures.append({"name": case["name"], "expected": expected, "actual": sorted(validators)})
         self.assertEqual(failures, [])
+
+    def test_asset_catalog_uses_asset_variant_refs_not_definition_refs(self):
+        case = next(case for case in self.cases if case["name"] == "valid_asset-catalog-definition")
+        instance = json.loads(json.dumps(case["instance"]))
+        instance["variant_refs"] = [{"variant_id": "asset_variant.character_father.portrait_neutral.v3"}]
+        errors = list(self.registry.iter_errors(case["schema_urn"], instance))
+        self.assertEqual(errors, [])
 
     def test_provider_config_rejects_secret_keys_case_insensitively(self):
         case = next(case for case in self.cases if case["name"] == "valid_provider-profile")
@@ -112,3 +143,4 @@ class FixtureValidationTests(unittest.TestCase):
         summary = validate_all(ROOT)
         self.assertEqual(summary["mismatches"], 0)
         self.assertEqual(summary["total"], len(self.cases))
+
