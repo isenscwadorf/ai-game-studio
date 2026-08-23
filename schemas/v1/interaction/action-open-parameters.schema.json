@@ -1,0 +1,1 @@
+{"$schema":"https://json-schema.org/draft/2020-12/schema","$id":"urn:aigs:schema:v1:action-open-parameters","type":"object","additionalProperties":false,"properties":{"target_instance_id":{"type":"string","format":"uuid"}},"required":["target_instance_id"]}

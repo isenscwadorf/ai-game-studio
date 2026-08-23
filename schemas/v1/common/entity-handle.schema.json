@@ -1,0 +1,1 @@
+{"$schema":"https://json-schema.org/draft/2020-12/schema","$id":"urn:aigs:schema:v1:entity-handle","type":"object","additionalProperties":false,"properties":{"definition_ref":{"$ref":"urn:aigs:schema:v1:definition-ref"},"instance_id":{"type":"string","format":"uuid"}},"required":["definition_ref","instance_id"]}

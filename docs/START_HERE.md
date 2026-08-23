@@ -45,16 +45,24 @@ Do not begin broad runtime implementation until the core schema contracts and Sn
 
 ## Current development sequence
 
-1. Bootstrap durable repo memory.
-2. Write/approve core engine schemas.
-3. Write/approve Snowed In vertical-slice spec.
-4. Write implementation plan.
-5. Implement schema-validation proof with tests.
+1. Bootstrap durable repo memory. ✓
+2. Design/approve core engine schemas. ✓
+3. Implement/verify core schema registry and validation tooling. **Current**
+4. Write/approve Snowed In vertical-slice spec.
+5. Write Snowed In implementation plan.
 6. Begin Snowed In prototype incrementally.
 
-## Verification
+## Development setup for M0 schema work
 
-There is no runtime/test suite yet because the repository is in M0 documentation bootstrap. Once tooling exists, exact setup and fast-test commands must be recorded here and in `docs/CURRENT_STATE.md`.
+Python 3.12+ is used only for development/schema validation. It is not an exported-game dependency.
+
+```bash
+pip install -r requirements-dev.txt
+python -m unittest discover -s tests -p 'test_*.py' -v
+python tools/schema_validation/validate_fixtures.py
+```
+
+The schema registry resolves references locally. Tests must not require network access.
 
 ## Before ending a session
 
