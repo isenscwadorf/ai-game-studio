@@ -50,6 +50,41 @@ const additionalCases = [
     valid: false,
     instance: { api_key: 'not-allowed' },
   },
+  {
+    name: 'valid_dialogue-target_same-scene',
+    schema_urn: 'urn:aigs:schema:v1:dialogue-target',
+    valid: true,
+    instance: { scene_ref: null, entry_id: 'line.start' },
+  },
+  {
+    name: 'valid_dialogue-choice-option',
+    schema_urn: 'urn:aigs:schema:v1:dialogue-choice-option',
+    valid: true,
+    instance: { label: 'Continue', target: { scene_ref: null, entry_id: 'line.start' } },
+  },
+  {
+    name: 'valid_dialogue-entry_narration',
+    schema_urn: 'urn:aigs:schema:v1:dialogue-entry',
+    valid: true,
+    instance: { entry_id: 'line.start', kind: 'narration', text: 'Snow covers the road.', next: null },
+  },
+  {
+    name: 'valid_dialogue-scene',
+    schema_urn: 'urn:aigs:schema:v1:dialogue-scene-definition',
+    valid: true,
+    instance: {
+      schema_id: 'aigs.dialogue.scene',
+      schema_version: 1,
+      id: 'dialogue.native_parity',
+      kind: 'dialogue_scene',
+      display_name: 'Native parity',
+      input_mode: 'free',
+      entry_point: 'line.start',
+      entries: [
+        { entry_id: 'line.start', kind: 'narration', text: 'Snow covers the road.', next: null },
+      ],
+    },
+  },
 ];
 
 function normalizeErrors(errors) {
