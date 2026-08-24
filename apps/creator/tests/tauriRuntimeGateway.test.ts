@@ -45,6 +45,14 @@ describe('tauriRuntimeGateway', () => {
         currentLocationRef: 'location.kitchen', activeSceneRef: null, activeNpcRef: 'character.maria', aiStatus: 'idle',
       },
     });
+    expect(decodeRuntimeEvent({
+      type: 'dialogue_request', sessionId: 'session.one', requestId: 'dialogue.1', npcRef: 'character.maria', text: 'Are you okay?',
+    })).toEqual({
+      type: 'dialogue_request', sessionId: 'session.one', requestId: 'dialogue.1', npcRef: 'character.maria', text: 'Are you okay?',
+    });
+    expect(() => decodeRuntimeEvent({
+      type: 'dialogue_request', sessionId: 'session.one', npcRef: 'character.maria', text: 'missing request id',
+    })).toThrow();
     expect(() => decodeRuntimeEvent({ type: 'runtime.exec', command: 'calc' })).toThrow();
     expect(() => decodeRuntimeEvent({ type: 'log', sessionId: 'session.one', entry: { level: 'wat', message: 'x' } })).toThrow();
     expect(() => decodeRuntimeEvent(null)).toThrow();
