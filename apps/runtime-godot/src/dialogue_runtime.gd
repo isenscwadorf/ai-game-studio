@@ -62,9 +62,32 @@ func choose(option_index: int) -> Error:
         return ERR_INVALID_DATA
     return _follow_target(option.get("target"))
 
+func set_active_npc(character_id: String) -> void:
+    active_npc_ref = character_id.strip_edges()
+
+func append_player_line(text: String) -> void:
+    var value := text.strip_edges()
+    if value.is_empty():
+        return
+    history.append({"kind": "player", "text": value})
+
+func append_ai_line(character_id: String, text: String) -> void:
+    var value := text.strip_edges()
+    if character_id.is_empty() or value.is_empty():
+        return
+    active_npc_ref = character_id
+    history.append({
+        "kind": "line",
+        "speaker_ref": character_id,
+        "text": value,
+        "source": "ai",
+    })
+
 func free_input_allowed() -> bool:
-    if active_scene_ref.is_empty() or active_npc_ref.is_empty():
+    if active_npc_ref.is_empty():
         return false
+    if active_scene_ref.is_empty():
+        return true
     return _active_scene().get("input_mode", "free") != "choices_only"
 
 func _active_scene() -> Dictionary:
