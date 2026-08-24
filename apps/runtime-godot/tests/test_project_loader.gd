@@ -15,6 +15,7 @@ func _init() -> void:
     if failures.is_empty():
         print("PASS test_project_loader")
         quit(0)
+        return
     for failure in failures:
         push_error(failure)
     quit(1)
