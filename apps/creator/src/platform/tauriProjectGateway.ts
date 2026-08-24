@@ -109,6 +109,48 @@ function decodeProjectPayload(payload: unknown): ProjectPayload {
   };
 }
 
+function decodeDialoguePayload(payload: unknown): StoredDefinition['document'][] {
+  if (!Array.isArray(payload)) {
+    throw new ProjectValidationError([{
+      code: 'DIALOGUE_PAYLOAD_INVALID',
+      path: '/dialogue',
+      message: 'Native dialogue response must be an array.',
+    }]);
+  }
+  const issues: ValidationIssue[] = [];
+  payload.forEach((document, index) => {
+    if (!isPlainRecord(document)) {
+      issues.push({
+        code: 'PROJECT_PAYLOAD_DOCUMENT_INVALID',
+        path: `/dialogue/${index}`,
+        message: 'Native dialogue response document must be an object.',
+      });
+    }
+  });
+  if (issues.length > 0) throw new ProjectValidationError(sortIssues(issues));
+  return payload as StoredDefinition['document'][];
+}
+
+function dialogueDocuments(snapshot: ProjectSnapshot): StoredDefinition['document'][] {
+  return snapshot.definitions
+    .filter((definition) => definition.collection === 'dialogue')
+    .map((definition) => definition.document);
+}
+
+function snapshotWithDialogueRoot(snapshot: ProjectSnapshot): ProjectSnapshot {
+  const dialogue = dialogueDocuments(snapshot);
+  if (dialogue.length === 0 || snapshot.manifest.definition_roots.includes('dialogue')) {
+    return snapshot;
+  }
+  return {
+    ...snapshot,
+    manifest: {
+      ...snapshot.manifest,
+      definition_roots: [...snapshot.manifest.definition_roots, 'dialogue'],
+    },
+  };
+}
+
 function payloadFromSnapshot(snapshot: ProjectSnapshot): ProjectPayload {
   return {
     manifest: snapshot.manifest,
@@ -121,14 +163,21 @@ function payloadFromSnapshot(snapshot: ProjectSnapshot): ProjectPayload {
   };
 }
 
-function snapshotFromPayload(nativePayload: unknown, rootPath: string, requireCanonicalProject: boolean): ProjectSnapshot {
+function snapshotFromPayload(
+  nativePayload: unknown,
+  dialoguePayload: unknown,
+  rootPath: string,
+  requireCanonicalProject: boolean,
+): ProjectSnapshot {
   const payload = decodeProjectPayload(nativePayload);
+  const dialogue = decodeDialoguePayload(dialoguePayload);
   const snapshot: ProjectSnapshot = {
     rootPath,
     manifest: payload.manifest,
     definitions: [
       ...payload.characters.map((document) => ({ collection: 'characters' as const, document })),
       ...payload.locations.map((document) => ({ collection: 'locations' as const, document })),
+      ...dialogue.map((document) => ({ collection: 'dialogue' as const, document })),
     ],
     dirty: false,
   };
@@ -166,22 +215,39 @@ export const tauriProjectGateway: ProjectGateway = {
   chooseProjectDirectory: () => chooseDirectory('Open a project directory'),
 
   async createProject(parentDir, folderName, snapshot) {
-    validateSnapshot(snapshot);
-    const payload = payloadFromSnapshot(snapshot);
-    const nativePayload = await invoke<unknown>('create_project', { parentDir, folderName, payload });
-    return snapshotFromPayload(nativePayload, projectDirectory(parentDir, folderName), true);
+    const persisted = snapshotWithDialogueRoot(snapshot);
+    validateSnapshot(persisted);
+    const rootPath = projectDirectory(parentDir, folderName);
+    const nativePayload = await invoke<unknown>('create_project', {
+      parentDir,
+      folderName,
+      payload: payloadFromSnapshot(persisted),
+    });
+    const dialoguePayload = await invoke<unknown>('save_dialogue_definitions', {
+      projectDir: rootPath,
+      definitions: dialogueDocuments(persisted),
+    });
+    return snapshotFromPayload(nativePayload, dialoguePayload, rootPath, true);
   },
 
   async openProject(projectDir) {
     const nativePayload = await invoke<unknown>('open_project', { projectDir });
-    return snapshotFromPayload(nativePayload, projectDir, false);
+    const dialoguePayload = await invoke<unknown>('read_dialogue_definitions', { projectDir });
+    return snapshotFromPayload(nativePayload, dialoguePayload, projectDir, false);
   },
 
   async saveProject(snapshot) {
-    validateSnapshot(snapshot);
-    const projectDir = requireRootPath(snapshot);
-    const payload = payloadFromSnapshot(snapshot);
-    const nativePayload = await invoke<unknown>('save_project', { projectDir, payload });
-    return snapshotFromPayload(nativePayload, projectDir, true);
+    const persisted = snapshotWithDialogueRoot(snapshot);
+    validateSnapshot(persisted);
+    const projectDir = requireRootPath(persisted);
+    const nativePayload = await invoke<unknown>('save_project', {
+      projectDir,
+      payload: payloadFromSnapshot(persisted),
+    });
+    const dialoguePayload = await invoke<unknown>('save_dialogue_definitions', {
+      projectDir,
+      definitions: dialogueDocuments(persisted),
+    });
+    return snapshotFromPayload(nativePayload, dialoguePayload, projectDir, true);
   },
 };
