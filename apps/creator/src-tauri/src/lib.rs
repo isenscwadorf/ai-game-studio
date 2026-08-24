@@ -1,5 +1,6 @@
 mod asset_import;
 mod project_fs;
+mod runtime_bridge;
 
 use asset_import::{import_visual_asset, read_visual_asset, remove_visual_asset, resolve_visual_asset};
 use project_fs::{create_project, open_project, save_project};
