@@ -19,6 +19,9 @@ export type ProjectEditorAction =
   | { type: 'locationCreated'; document: StoredDefinition['document'] }
   | { type: 'locationUpdated'; id: string; document: StoredDefinition['document'] }
   | { type: 'locationDeleted'; id: string }
+  | { type: 'dialogueCreated'; document: StoredDefinition['document'] }
+  | { type: 'dialogueUpdated'; id: string; document: StoredDefinition['document'] }
+  | { type: 'dialogueDeleted'; id: string }
   | { type: 'operationFailed'; error: string }
   | { type: 'projectClosed' };
 
@@ -27,6 +30,67 @@ export const initialProjectEditorState: ProjectEditorState = {
   status: 'home',
   error: null,
 };
+
+function createdDefinition(
+  state: ProjectEditorState,
+  collection: StoredDefinition['collection'],
+  document: StoredDefinition['document'],
+): ProjectEditorState {
+  return state.project
+    ? {
+      project: {
+        ...state.project,
+        definitions: [...state.project.definitions, { collection, document }],
+        dirty: true,
+      },
+      status: 'open',
+      error: null,
+    }
+    : state;
+}
+
+function updatedDefinition(
+  state: ProjectEditorState,
+  collection: StoredDefinition['collection'],
+  id: string,
+  document: StoredDefinition['document'],
+): ProjectEditorState {
+  return state.project
+    ? {
+      project: {
+        ...state.project,
+        definitions: state.project.definitions.map((definition) => (
+          definition.collection === collection && definition.document.id === id
+            ? { ...definition, document: { ...document, id: definition.document.id } }
+            : definition
+        )),
+        dirty: true,
+      },
+      status: 'open',
+      error: null,
+    }
+    : state;
+}
+
+function deletedDefinition(
+  state: ProjectEditorState,
+  collection: StoredDefinition['collection'],
+  id: string,
+): ProjectEditorState {
+  return state.project
+    ? {
+      project: {
+        ...state.project,
+        definitions: state.project.definitions.filter((definition) => (
+          definition.collection !== collection || definition.document.id !== id
+        )),
+        dirty: true,
+      },
+      status: 'open',
+      error: null,
+    }
+    : state;
+}
 
 export function reducer(state: ProjectEditorState, action: ProjectEditorAction): ProjectEditorState {
   switch (action.type) {
@@ -55,89 +119,23 @@ export function reducer(state: ProjectEditorState, action: ProjectEditorAction):
         }
         : state;
     case 'characterCreated':
-      return state.project
-        ? {
-          project: {
-            ...state.project,
-            definitions: [...state.project.definitions, { collection: 'characters', document: action.document }],
-            dirty: true,
-          },
-          status: 'open',
-          error: null,
-        }
-        : state;
+      return createdDefinition(state, 'characters', action.document);
     case 'characterUpdated':
-      return state.project
-        ? {
-          project: {
-            ...state.project,
-            definitions: state.project.definitions.map((definition) => (
-              definition.collection === 'characters' && definition.document.id === action.id
-                ? { ...definition, document: { ...action.document, id: definition.document.id } }
-                : definition
-            )),
-            dirty: true,
-          },
-          status: 'open',
-          error: null,
-        }
-        : state;
+      return updatedDefinition(state, 'characters', action.id, action.document);
     case 'characterDeleted':
-      return state.project
-        ? {
-          project: {
-            ...state.project,
-            definitions: state.project.definitions.filter((definition) => (
-              definition.collection !== 'characters' || definition.document.id !== action.id
-            )),
-            dirty: true,
-          },
-          status: 'open',
-          error: null,
-        }
-        : state;
+      return deletedDefinition(state, 'characters', action.id);
     case 'locationCreated':
-      return state.project
-        ? {
-          project: {
-            ...state.project,
-            definitions: [...state.project.definitions, { collection: 'locations', document: action.document }],
-            dirty: true,
-          },
-          status: 'open',
-          error: null,
-        }
-        : state;
+      return createdDefinition(state, 'locations', action.document);
     case 'locationUpdated':
-      return state.project
-        ? {
-          project: {
-            ...state.project,
-            definitions: state.project.definitions.map((definition) => (
-              definition.collection === 'locations' && definition.document.id === action.id
-                ? { ...definition, document: { ...action.document, id: definition.document.id } }
-                : definition
-            )),
-            dirty: true,
-          },
-          status: 'open',
-          error: null,
-        }
-        : state;
+      return updatedDefinition(state, 'locations', action.id, action.document);
     case 'locationDeleted':
-      return state.project
-        ? {
-          project: {
-            ...state.project,
-            definitions: state.project.definitions.filter((definition) => (
-              definition.collection !== 'locations' || definition.document.id !== action.id
-            )),
-            dirty: true,
-          },
-          status: 'open',
-          error: null,
-        }
-        : state;
+      return deletedDefinition(state, 'locations', action.id);
+    case 'dialogueCreated':
+      return createdDefinition(state, 'dialogue', action.document);
+    case 'dialogueUpdated':
+      return updatedDefinition(state, 'dialogue', action.id, action.document);
+    case 'dialogueDeleted':
+      return deletedDefinition(state, 'dialogue', action.id);
     case 'operationFailed':
       return {
         ...state,
