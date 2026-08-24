@@ -20,7 +20,7 @@ export function createBlankProject({ displayName, premise }: BlankProjectOptions
       project_id: `project.${slugifyIdPart(trimmedDisplayName)}`,
       display_name: trimmedDisplayName,
       project_format_version: 1,
-      definition_roots: ['characters', 'locations'],
+      definition_roots: ['characters', 'locations', 'dialogue'],
       extensions: {
         'aigs.creator': {
           premise: premise.trim(),
