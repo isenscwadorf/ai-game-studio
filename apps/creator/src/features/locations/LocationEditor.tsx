@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
+import { VisualAssetControls } from '../../components/VisualAssetControls';
 import { createLocationDefinition } from '../../domain/locationFactory';
 import type { StoredDefinition } from '../../domain/projectTypes';
 import { validateDocument } from '../../domain/validation';
+import type { VisualAssetGateway } from '../../platform/VisualAssetGateway';
 
 type LocationEditorProps = {
   busy: boolean;
@@ -11,6 +13,10 @@ type LocationEditorProps = {
   onDelete: (id: string) => void;
   onSelect: (key: string) => void;
   onUpdate: (id: string, document: StoredDefinition['document']) => void;
+  projectRoot?: string | null;
+  visualAssetGateway?: VisualAssetGateway;
+  onEnsureSaved?: () => Promise<boolean>;
+  onProjectReload?: () => Promise<void>;
 };
 
 type LocationListItem = { key: string; document: StoredDefinition['document'] };
@@ -69,15 +75,16 @@ function selectedLocationIds(event: React.ChangeEvent<HTMLSelectElement>): strin
   return [...event.currentTarget.selectedOptions].map((option) => option.value);
 }
 
-function ChildLocationSelect({ disabled, locationIds, selectedIds, onChange }: {
+function LocationMultiSelect({ disabled, label, locationIds, selectedIds, onChange }: {
   disabled: boolean;
+  label: string;
   locationIds: string[];
   selectedIds: string[];
   onChange: (ids: string[]) => void;
 }) {
   return (
     <label className="form-field">
-      <span>Child locations</span>
+      <span>{label}</span>
       <select disabled={disabled} multiple onChange={(event) => { if (!disabled) onChange(selectedLocationIds(event)); }} value={selectedIds}>
         {locationIds.map((id) => <option key={id} value={id}>{id}</option>)}
       </select>
@@ -85,7 +92,19 @@ function ChildLocationSelect({ disabled, locationIds, selectedIds, onChange }: {
   );
 }
 
-export function LocationEditor({ busy, definitions, selectedLocationKey, onCreate, onDelete, onSelect, onUpdate }: LocationEditorProps) {
+export function LocationEditor({
+  busy,
+  definitions,
+  selectedLocationKey,
+  onCreate,
+  onDelete,
+  onSelect,
+  onUpdate,
+  projectRoot = null,
+  visualAssetGateway,
+  onEnsureSaved,
+  onProjectReload,
+}: LocationEditorProps) {
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState('');
   const [newChildLocationIds, setNewChildLocationIds] = useState<string[]>([]);
@@ -130,6 +149,8 @@ export function LocationEditor({ busy, definitions, selectedLocationKey, onCreat
     }
   }
 
+  const otherLocationIds = allLocationIds.filter((id) => id !== editableId);
+
   return (
     <section aria-labelledby="locations-title" className="location-editor">
       <div className="location-editor__header">
@@ -146,7 +167,7 @@ export function LocationEditor({ busy, definitions, selectedLocationKey, onCreat
             <span>Name</span>
             <input autoFocus disabled={busy} onChange={(event) => setNewName(event.target.value)} value={newName} />
           </label>
-          <ChildLocationSelect disabled={busy} locationIds={allLocationIds} selectedIds={newChildLocationIds} onChange={setNewChildLocationIds} />
+          <LocationMultiSelect disabled={busy} label="Child locations" locationIds={allLocationIds} selectedIds={newChildLocationIds} onChange={setNewChildLocationIds} />
           <div className="modal__actions">
             <button disabled={busy} onClick={() => { setCreating(false); setNewName(''); setNewChildLocationIds([]); }} type="button">Cancel</button>
             <button className="button--primary" disabled={busy || !newName.trim()} type="submit">Add Location</button>
@@ -175,6 +196,17 @@ export function LocationEditor({ busy, definitions, selectedLocationKey, onCreat
             <p role="alert">Location data is malformed and cannot be edited safely.</p>
           ) : (
             <div key={`${selectedLocationKey ?? 'unselected'}:${editableId}`}>
+              {visualAssetGateway && onEnsureSaved && onProjectReload ? (
+                <VisualAssetControls
+                  busy={busy}
+                  gateway={visualAssetGateway}
+                  onEnsureSaved={onEnsureSaved}
+                  onProjectReload={onProjectReload}
+                  projectRoot={projectRoot}
+                  subjectId={editableId}
+                  visualKind="location_background"
+                />
+              ) : null}
               <label className="form-field">
                 <span>Name</span>
                 <input disabled={busy} onBlur={() => update((location) => ({ ...location, display_name: nameDraft }))} onChange={(event) => setNameDraft(event.target.value)} value={nameDraft} />
@@ -187,11 +219,19 @@ export function LocationEditor({ busy, definitions, selectedLocationKey, onCreat
                 <span>Tags (one per line)</span>
                 <textarea disabled={busy} onBlur={() => { if (!busy) update((location) => ({ ...location, tags: normalizeLocationTags(tagDraft, location) })); }} onChange={(event) => setTagDraft(event.target.value)} value={tagDraft} />
               </label>
-              <ChildLocationSelect
+              <LocationMultiSelect
                 disabled={busy}
-                locationIds={allLocationIds.filter((id) => id !== editableId)}
+                label="Child locations"
+                locationIds={otherLocationIds}
                 selectedIds={referenceIds(editable.child_location_refs).filter((id) => id !== editableId)}
                 onChange={(ids) => update((location) => ({ ...location, child_location_refs: ids.map((ref) => ({ ref })) }))}
+              />
+              <LocationMultiSelect
+                disabled={busy}
+                label="Destinations"
+                locationIds={otherLocationIds}
+                selectedIds={referenceIds(editable.destination_refs).filter((id) => id !== editableId)}
+                onChange={(ids) => update((location) => ({ ...location, destination_refs: ids.map((ref) => ({ ref })) }))}
               />
               <button className="button--danger" disabled={busy} onClick={() => { if (!busy && editableId) onDelete(editableId); }} type="button">Delete Location</button>
             </div>

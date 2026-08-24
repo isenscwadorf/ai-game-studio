@@ -1238,6 +1238,21 @@ export const schemaCatalog = [
             "content_sha256"
           ]
         },
+        "presentation": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "sprite_framing": {
+              "enum": [
+                "full_body",
+                "two_thirds"
+              ]
+            }
+          },
+          "required": [
+            "sprite_framing"
+          ]
+        },
         "generation_record_ref": {
           "oneOf": [
             {
@@ -1987,6 +2002,82 @@ export const schemaCatalog = [
     }
   },
   {
+    "schemaId": "aigs.dialogue.scene",
+    "urn": "urn:aigs:schema:v1:dialogue-scene-definition",
+    "schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "$id": "urn:aigs:schema:v1:dialogue-scene-definition",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schema_id": {
+          "const": "aigs.dialogue.scene"
+        },
+        "schema_version": {
+          "const": 1
+        },
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]*(\\.[a-z0-9][a-z0-9_-]*)+$"
+        },
+        "kind": {
+          "const": "dialogue_scene"
+        },
+        "display_name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "description": {
+          "type": "string"
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9_-]*$"
+          },
+          "uniqueItems": true
+        },
+        "extensions": {
+          "type": "object",
+          "propertyNames": {
+            "pattern": "^[a-z][a-z0-9_]*(\\.[a-z0-9][a-z0-9_-]*)+$"
+          },
+          "additionalProperties": {
+            "type": "object"
+          }
+        },
+        "input_mode": {
+          "enum": [
+            "free",
+            "choices_only"
+          ]
+        },
+        "entry_point": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_-]*(\\.[a-z0-9_-]+)*$"
+        },
+        "entries": {
+          "type": "array",
+          "items": {
+            "$ref": "urn:aigs:schema:v1:dialogue-entry"
+          },
+          "minItems": 1
+        }
+      },
+      "required": [
+        "schema_id",
+        "schema_version",
+        "id",
+        "kind",
+        "display_name",
+        "input_mode",
+        "entry_point",
+        "entries"
+      ]
+    }
+  },
+  {
     "schemaId": "aigs.event.definition",
     "urn": "urn:aigs:schema:v1:event-definition",
     "schema": {
@@ -2321,6 +2412,13 @@ export const schemaCatalog = [
           }
         },
         "child_location_refs": {
+          "type": "array",
+          "items": {
+            "$ref": "urn:aigs:schema:v1:definition-ref"
+          },
+          "uniqueItems": true
+        },
+        "destination_refs": {
           "type": "array",
           "items": {
             "$ref": "urn:aigs:schema:v1:definition-ref"
@@ -2663,6 +2761,18 @@ export const schemaCatalog = [
               "$ref": "urn:aigs:schema:v1:definition-ref"
             },
             "npc_dialogue": {
+              "$ref": "urn:aigs:schema:v1:definition-ref"
+            }
+          }
+        },
+        "playtest": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "start_location_ref": {
+              "$ref": "urn:aigs:schema:v1:definition-ref"
+            },
+            "entry_scene_ref": {
               "$ref": "urn:aigs:schema:v1:definition-ref"
             }
           }
@@ -3297,6 +3407,181 @@ export const schemaCatalog = [
       },
       "required": [
         "ref"
+      ]
+    }
+  },
+  {
+    "schemaId": "aigs.schema.dialogue_choice_option",
+    "urn": "urn:aigs:schema:v1:dialogue-choice-option",
+    "schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "$id": "urn:aigs:schema:v1:dialogue-choice-option",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "label": {
+          "type": "string",
+          "minLength": 1
+        },
+        "target": {
+          "$ref": "urn:aigs:schema:v1:dialogue-target"
+        }
+      },
+      "required": [
+        "label",
+        "target"
+      ]
+    }
+  },
+  {
+    "schemaId": "aigs.schema.dialogue_entry",
+    "urn": "urn:aigs:schema:v1:dialogue-entry",
+    "schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "$id": "urn:aigs:schema:v1:dialogue-entry",
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "entry_id": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_-]*(\\.[a-z0-9_-]+)*$"
+            },
+            "kind": {
+              "const": "line"
+            },
+            "speaker_ref": {
+              "$ref": "urn:aigs:schema:v1:definition-ref"
+            },
+            "text": {
+              "type": "string",
+              "minLength": 1
+            },
+            "next": {
+              "oneOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "$ref": "urn:aigs:schema:v1:dialogue-target"
+                }
+              ]
+            }
+          },
+          "required": [
+            "entry_id",
+            "kind",
+            "speaker_ref",
+            "text",
+            "next"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "entry_id": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_-]*(\\.[a-z0-9_-]+)*$"
+            },
+            "kind": {
+              "const": "narration"
+            },
+            "text": {
+              "type": "string",
+              "minLength": 1
+            },
+            "next": {
+              "oneOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "$ref": "urn:aigs:schema:v1:dialogue-target"
+                }
+              ]
+            }
+          },
+          "required": [
+            "entry_id",
+            "kind",
+            "text",
+            "next"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "entry_id": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_-]*(\\.[a-z0-9_-]+)*$"
+            },
+            "kind": {
+              "const": "choice"
+            },
+            "prompt": {
+              "type": "string"
+            },
+            "options": {
+              "type": "array",
+              "items": {
+                "$ref": "urn:aigs:schema:v1:dialogue-choice-option"
+              },
+              "minItems": 1
+            }
+          },
+          "required": [
+            "entry_id",
+            "kind",
+            "options"
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "schemaId": "aigs.schema.dialogue_target",
+    "urn": "urn:aigs:schema:v1:dialogue-target",
+    "schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "$id": "urn:aigs:schema:v1:dialogue-target",
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "scene_ref": {
+              "type": "null"
+            },
+            "entry_id": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_-]*(\\.[a-z0-9_-]+)*$"
+            }
+          },
+          "required": [
+            "scene_ref",
+            "entry_id"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "scene_ref": {
+              "$ref": "urn:aigs:schema:v1:definition-ref"
+            },
+            "entry_id": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_-]*(\\.[a-z0-9_-]+)*$"
+            }
+          },
+          "required": [
+            "scene_ref",
+            "entry_id"
+          ]
+        }
       ]
     }
   },

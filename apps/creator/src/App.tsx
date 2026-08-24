@@ -12,14 +12,17 @@ import { LocationEditor } from './features/locations/LocationEditor';
 import { HomeScreen } from './features/home/HomeScreen';
 import { NewProjectDialog } from './features/home/NewProjectDialog';
 import type { ProjectGateway } from './platform/ProjectGateway';
+import type { VisualAssetGateway } from './platform/VisualAssetGateway';
 import type { CreatorWindowGateway } from './platform/CreatorWindowGateway';
 import { tauriProjectGateway } from './platform/tauriProjectGateway';
+import { tauriVisualAssetGateway } from './platform/tauriVisualAssetGateway';
 import { initialProjectEditorState, reducer } from './state/projectReducer';
 import { RequestGuard } from './state/requestGuard';
 import { addRecentProject, loadRecentProjects, saveRecentProjects } from './state/recentProjects';
 
 type AppProps = {
   gateway?: ProjectGateway;
+  visualAssetGateway?: VisualAssetGateway;
   windowGateway?: CreatorWindowGateway;
 };
 
@@ -90,7 +93,11 @@ function recordRecentProject(project: ProjectSnapshot): void {
   }));
 }
 
-export function App({ gateway = tauriProjectGateway, windowGateway = noWindowGateway }: AppProps) {
+export function App({
+  gateway = tauriProjectGateway,
+  visualAssetGateway = tauriVisualAssetGateway,
+  windowGateway = noWindowGateway,
+}: AppProps) {
   const [state, dispatch] = useReducer(reducer, initialProjectEditorState);
   const [newProjectOpen, setNewProjectOpen] = useState(false);
   const [activeWorkspace, setActiveWorkspace] = useState<'Dashboard' | 'Characters' | 'Locations'>('Dashboard');
@@ -286,6 +293,20 @@ export function App({ gateway = tauriProjectGateway, windowGateway = noWindowGat
     return false;
   }
 
+  async function ensureSavedForVisualMutation(): Promise<boolean> {
+    if (!state.project) return false;
+    return state.project.dirty ? saveProject() : true;
+  }
+
+  async function reloadCurrentProject(): Promise<void> {
+    const rootPath = state.project?.rootPath;
+    if (!rootPath) throw new Error('An open project is required to refresh visual assets.');
+    const project = usableSnapshot(await gateway.openProject(rootPath));
+    if (!mountedRef.current) return;
+    recordRecentProject(project);
+    dispatch({ type: 'projectOpened', project });
+  }
+
   async function saveAndContinue() {
     const transition = pendingTransitionRef.current;
     if (!transition) return;
@@ -335,7 +356,11 @@ export function App({ gateway = tauriProjectGateway, windowGateway = noWindowGat
         <CharacterEditor
           busy={busy}
           definitions={project.definitions}
+          onEnsureSaved={ensureSavedForVisualMutation}
+          onProjectReload={reloadCurrentProject}
+          projectRoot={project.rootPath}
           selectedCharacterKey={selectedCharacterKey}
+          visualAssetGateway={visualAssetGateway}
           onCreate={(document) => {
             dispatch({ type: 'characterCreated', document });
             setSelectedCharacterKey(`character-${project.definitions.filter((definition) => definition.collection === 'characters').length}`);
@@ -351,7 +376,11 @@ export function App({ gateway = tauriProjectGateway, windowGateway = noWindowGat
         <LocationEditor
           busy={busy}
           definitions={project.definitions}
+          onEnsureSaved={ensureSavedForVisualMutation}
+          onProjectReload={reloadCurrentProject}
+          projectRoot={project.rootPath}
           selectedLocationKey={selectedLocationKey}
+          visualAssetGateway={visualAssetGateway}
           onCreate={(document) => {
             dispatch({ type: 'locationCreated', document });
             setSelectedLocationKey(`location-${project.definitions.filter((definition) => definition.collection === 'locations').length}`);

@@ -54,6 +54,21 @@ def iter_definition_refs(value: Any, path=()):
             yield from iter_definition_refs(child, (*path, i))
 
 
+def definition_schema_id(value: Any):
+    if isinstance(value, dict):
+        return value.get("schema_id")
+    return None
+
+
+def target_ref_id(target: Any):
+    if not isinstance(target, dict):
+        return None
+    scene_ref = target.get("scene_ref")
+    if isinstance(scene_ref, dict):
+        return scene_ref.get("ref")
+    return None
+
+
 class SemanticValidator:
     def __init__(self, registry):
         self.registry = registry
@@ -106,6 +121,8 @@ class SemanticValidator:
                         path=list(path),
                         details={"ref": ref},
                     ))
+
+        errors.extend(self._validate_slice2_semantics(valid_definitions, by_id))
 
         valid_dimensions = {}
         for definition in valid_definitions:
@@ -216,6 +233,155 @@ class SemanticValidator:
                 errors.append(error("STRUCTURAL_VALIDATION_FAILED", "ChangeSet must be an object."))
 
         errors.sort(key=lambda e: (e["code"], str(e.get("object_id")), str(e.get("path"))))
+        return errors
+
+    def _validate_slice2_semantics(self, definitions: list[dict], by_id: dict[str, dict]) -> list[dict]:
+        errors = []
+        scenes = {
+            definition.get("id"): definition
+            for definition in definitions
+            if definition.get("schema_id") == "aigs.dialogue.scene" and definition.get("id")
+        }
+
+        for definition in definitions:
+            sid = definition.get("schema_id")
+            object_id = definition.get("id")
+
+            if sid == "aigs.project.manifest":
+                playtest = definition.get("playtest", {})
+                start_ref = playtest.get("start_location_ref", {}).get("ref") if isinstance(playtest.get("start_location_ref"), dict) else None
+                if start_ref and start_ref in by_id and definition_schema_id(by_id[start_ref]) != "aigs.location.definition":
+                    errors.append(error(
+                        "PLAYTEST_START_LOCATION_KIND_INVALID",
+                        f"Playtest start location {start_ref} is not a Location definition.",
+                        path=["playtest", "start_location_ref"],
+                        details={"ref": start_ref},
+                    ))
+                entry_ref = playtest.get("entry_scene_ref", {}).get("ref") if isinstance(playtest.get("entry_scene_ref"), dict) else None
+                if entry_ref and entry_ref in by_id and definition_schema_id(by_id[entry_ref]) != "aigs.dialogue.scene":
+                    errors.append(error(
+                        "PLAYTEST_ENTRY_SCENE_KIND_INVALID",
+                        f"Playtest entry scene {entry_ref} is not a Dialogue Scene definition.",
+                        path=["playtest", "entry_scene_ref"],
+                        details={"ref": entry_ref},
+                    ))
+
+            if sid == "aigs.location.definition":
+                for index, destination in enumerate(definition.get("destination_refs", [])):
+                    ref = destination.get("ref") if isinstance(destination, dict) else None
+                    if ref and ref in by_id and definition_schema_id(by_id[ref]) != "aigs.location.definition":
+                        errors.append(error(
+                            "LOCATION_DESTINATION_KIND_INVALID",
+                            f"Location destination {ref} is not a Location definition.",
+                            object_id=object_id,
+                            path=["destination_refs", index],
+                            details={"ref": ref},
+                        ))
+
+            if sid != "aigs.dialogue.scene":
+                continue
+
+            entries = definition.get("entries", [])
+            entry_ids = [entry.get("entry_id") for entry in entries if isinstance(entry, dict)]
+            duplicate_entry_ids = sorted({entry_id for entry_id in entry_ids if entry_id and entry_ids.count(entry_id) > 1})
+            for entry_id in duplicate_entry_ids:
+                errors.append(error(
+                    "DIALOGUE_DUPLICATE_ENTRY_ID",
+                    f"Dialogue entry ID {entry_id} is duplicated.",
+                    object_id=object_id,
+                    path=["entries"],
+                    details={"entry_id": entry_id},
+                ))
+
+            local_entries = {
+                entry.get("entry_id"): entry
+                for entry in entries
+                if isinstance(entry, dict) and entry.get("entry_id")
+            }
+            entry_point = definition.get("entry_point")
+            if entry_point not in local_entries:
+                errors.append(error(
+                    "DIALOGUE_ENTRY_POINT_NOT_FOUND",
+                    f"Dialogue entry point {entry_point} does not exist in scene {object_id}.",
+                    object_id=object_id,
+                    path=["entry_point"],
+                    details={"entry_id": entry_point},
+                ))
+
+            for entry_index, entry in enumerate(entries):
+                if not isinstance(entry, dict):
+                    continue
+                if entry.get("kind") == "line":
+                    speaker_ref = entry.get("speaker_ref", {}).get("ref") if isinstance(entry.get("speaker_ref"), dict) else None
+                    speaker = by_id.get(speaker_ref) if speaker_ref else None
+                    if speaker_ref and speaker is None:
+                        errors.append(error(
+                            "DIALOGUE_SPEAKER_NOT_FOUND",
+                            f"Dialogue speaker {speaker_ref} does not exist.",
+                            object_id=object_id,
+                            path=["entries", entry_index, "speaker_ref"],
+                            details={"ref": speaker_ref},
+                        ))
+                    elif speaker_ref and definition_schema_id(speaker) != "aigs.character.definition":
+                        errors.append(error(
+                            "DIALOGUE_SPEAKER_KIND_INVALID",
+                            f"Dialogue speaker {speaker_ref} is not a Character definition.",
+                            object_id=object_id,
+                            path=["entries", entry_index, "speaker_ref"],
+                            details={"ref": speaker_ref},
+                        ))
+
+                targets = []
+                if entry.get("kind") in {"line", "narration"} and entry.get("next") is not None:
+                    targets.append((["entries", entry_index, "next"], entry.get("next")))
+                if entry.get("kind") == "choice":
+                    for option_index, option in enumerate(entry.get("options", [])):
+                        if isinstance(option, dict):
+                            targets.append((
+                                ["entries", entry_index, "options", option_index, "target"],
+                                option.get("target"),
+                            ))
+
+                for path, target in targets:
+                    if not isinstance(target, dict):
+                        continue
+                    target_entry_id = target.get("entry_id")
+                    target_scene_id = target_ref_id(target)
+                    if target_scene_id is None:
+                        if target_entry_id not in local_entries:
+                            errors.append(error(
+                                "DIALOGUE_TARGET_NOT_FOUND",
+                                f"Dialogue target entry {target_entry_id} does not exist in scene {object_id}.",
+                                object_id=object_id,
+                                path=path,
+                                details={"entry_id": target_entry_id},
+                            ))
+                        continue
+
+                    target_scene = scenes.get(target_scene_id)
+                    if target_scene is None:
+                        errors.append(error(
+                            "DIALOGUE_TARGET_SCENE_NOT_FOUND",
+                            f"Dialogue target scene {target_scene_id} does not exist.",
+                            object_id=object_id,
+                            path=path,
+                            details={"scene_ref": target_scene_id, "entry_id": target_entry_id},
+                        ))
+                        continue
+                    target_ids = {
+                        target_entry.get("entry_id")
+                        for target_entry in target_scene.get("entries", [])
+                        if isinstance(target_entry, dict)
+                    }
+                    if target_entry_id not in target_ids:
+                        errors.append(error(
+                            "DIALOGUE_TARGET_NOT_FOUND",
+                            f"Dialogue target entry {target_entry_id} does not exist in scene {target_scene_id}.",
+                            object_id=object_id,
+                            path=path,
+                            details={"scene_ref": target_scene_id, "entry_id": target_entry_id},
+                        ))
+
         return errors
 
     def validate_changeset(self, changeset: dict) -> list[dict]:

@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:aigs:schema:v1:dialogue-scene-definition",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema_id": { "const": "aigs.dialogue.scene" },
+    "schema_version": { "const": 1 },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]*(\\.[a-z0-9][a-z0-9_-]*)+$"
+    },
+    "kind": { "const": "dialogue_scene" },
+    "display_name": { "type": "string", "minLength": 1 },
+    "description": { "type": "string" },
+    "tags": {
+      "type": "array",
+      "items": { "type": "string", "pattern": "^[a-z0-9][a-z0-9_-]*$" },
+      "uniqueItems": true
+    },
+    "extensions": {
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^[a-z][a-z0-9_]*(\\.[a-z0-9][a-z0-9_-]*)+$"
+      },
+      "additionalProperties": { "type": "object" }
+    },
+    "input_mode": { "enum": ["free", "choices_only"] },
+    "entry_point": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_-]*(\\.[a-z0-9_-]+)*$"
+    },
+    "entries": {
+      "type": "array",
+      "items": { "$ref": "urn:aigs:schema:v1:dialogue-entry" },
+      "minItems": 1
+    }
+  },
+  "required": [
+    "schema_id",
+    "schema_version",
+    "id",
+    "kind",
+    "display_name",
+    "input_mode",
+    "entry_point",
+    "entries"
+  ]
+}

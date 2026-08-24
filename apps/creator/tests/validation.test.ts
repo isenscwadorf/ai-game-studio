@@ -85,6 +85,24 @@ describe('Creator project validation', () => {
     }));
   });
 
+  it('accepts native-managed visual identity and asset catalog refs at their canonical fields only', () => {
+    const result = validateProject({
+      manifest: { ...validManifest, asset_catalog_ref: { ref: 'asset_catalog.project' } },
+      definitions: [{
+        collection: 'characters',
+        document: { ...character('character.alex'), visual_identity_ref: { ref: 'asset_identity.character_alex' } },
+      }],
+    });
+
+    expect(result).toEqual({ valid: true, errors: [] });
+
+    const misplaced = validateProject(snapshotWith([{ ...location('location.hall'), child_location_refs: [{ ref: 'asset_identity.fake' }] }]));
+    expect(misplaced.errors).toContainEqual(expect.objectContaining({
+      code: 'REFERENCE_NOT_FOUND',
+      path: '/definitions/0/child_location_refs/0',
+    }));
+  });
+
   it('normalizes malformed user data into sorted errors instead of throwing', () => {
     expect(() => validateProject({ manifest: null, definitions: [{ schema_id: 42 }, null] })).not.toThrow();
 

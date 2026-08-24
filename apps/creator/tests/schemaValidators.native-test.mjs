@@ -50,6 +50,41 @@ const additionalCases = [
     valid: false,
     instance: { api_key: 'not-allowed' },
   },
+  {
+    name: 'valid_dialogue-target_same-scene',
+    schema_urn: 'urn:aigs:schema:v1:dialogue-target',
+    valid: true,
+    instance: { scene_ref: null, entry_id: 'line.start' },
+  },
+  {
+    name: 'valid_dialogue-choice-option',
+    schema_urn: 'urn:aigs:schema:v1:dialogue-choice-option',
+    valid: true,
+    instance: { label: 'Continue', target: { scene_ref: null, entry_id: 'line.start' } },
+  },
+  {
+    name: 'valid_dialogue-entry_narration',
+    schema_urn: 'urn:aigs:schema:v1:dialogue-entry',
+    valid: true,
+    instance: { entry_id: 'line.start', kind: 'narration', text: 'Snow covers the road.', next: null },
+  },
+  {
+    name: 'valid_dialogue-scene',
+    schema_urn: 'urn:aigs:schema:v1:dialogue-scene-definition',
+    valid: true,
+    instance: {
+      schema_id: 'aigs.dialogue.scene',
+      schema_version: 1,
+      id: 'dialogue.native_parity',
+      kind: 'dialogue_scene',
+      display_name: 'Native parity',
+      input_mode: 'free',
+      entry_point: 'line.start',
+      entries: [
+        { entry_id: 'line.start', kind: 'narration', text: 'Snow covers the road.', next: null },
+      ],
+    },
+  },
 ];
 
 function normalizeErrors(errors) {
@@ -104,11 +139,9 @@ test('native ESM generated validation accepts an ordinary valid manifest without
 });
 
 test('all generated validators match fresh Ajv for fixture and representative cases', async (context) => {
-  assert.equal(schemaValidators.length, 45);
   assert.equal(schemaValidators.length, schemaCatalog.length);
 
   const cases = await loadParityCases();
-  assert.equal(cases.length, 65);
   const casesByUrn = Map.groupBy(cases, (entry) => entry.schema_urn);
   const freshValidators = freshAjvValidators();
   assert.equal(casesByUrn.size, schemaCatalog.length);
@@ -140,6 +173,6 @@ test('all generated validators match fresh Ajv for fixture and representative ca
     });
   }
 
-  assert.equal(invokedValidators, 45);
-  context.diagnostic('Compared 45 generated validators across 59 fixtures and 6 representative cases.');
+  assert.equal(invokedValidators, schemaCatalog.length);
+  context.diagnostic(`Compared ${schemaCatalog.length} generated validators across ${cases.length} parity cases.`);
 });
