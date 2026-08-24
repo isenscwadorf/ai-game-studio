@@ -2,6 +2,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from '../src/App';
 import { createBlankProject } from '../src/domain/blankProject';
+import type { VisualAssetGateway } from '../src/platform/VisualAssetGateway';
 
 const { invokeMock, dialogOpenMock } = vi.hoisted(() => ({
   invokeMock: vi.fn(),
@@ -12,6 +13,14 @@ vi.mock('@tauri-apps/api/core', () => ({ invoke: invokeMock }));
 vi.mock('@tauri-apps/plugin-dialog', () => ({ open: dialogOpenMock }));
 
 import { tauriProjectGateway } from '../src/platform/tauriProjectGateway';
+
+const noVisualAssetGateway: VisualAssetGateway = {
+  async chooseImageFile() { return null; },
+  async importVisualAsset() { throw new Error('Visual import is outside this project persistence test.'); },
+  async resolveVisualAsset() { return null; },
+  async readVisualAsset() { throw new Error('Visual preview is outside this project persistence test.'); },
+  async removeVisualAsset() { return undefined; },
+};
 
 describe('Tauri project gateway and App integration', () => {
   afterEach(cleanup);
@@ -45,7 +54,7 @@ describe('Tauri project gateway and App integration', () => {
       throw new Error(`Unexpected native command: ${command}`);
     });
 
-    render(<App gateway={tauriProjectGateway} />);
+    render(<App gateway={tauriProjectGateway} visualAssetGateway={noVisualAssetGateway} />);
     fireEvent.click(screen.getByRole('button', { name: 'Open Project' }));
 
     expect(await screen.findByRole('heading', { name: 'Repairable Native Project' })).toBeInTheDocument();
@@ -84,7 +93,7 @@ describe('Tauri project gateway and App integration', () => {
     dialogOpenMock.mockResolvedValueOnce('C:\\Games\\Unsafe');
     invokeMock.mockResolvedValueOnce({ manifest: invalidManifest, characters: [], locations: [] });
 
-    render(<App gateway={tauriProjectGateway} />);
+    render(<App gateway={tauriProjectGateway} visualAssetGateway={noVisualAssetGateway} />);
     fireEvent.click(screen.getByRole('button', { name: 'Open Project' }));
 
     expect(await screen.findByRole('heading', { name: 'Untitled project' })).toBeInTheDocument();
