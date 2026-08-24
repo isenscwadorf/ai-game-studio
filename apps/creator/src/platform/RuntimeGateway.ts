@@ -19,7 +19,7 @@ export type RuntimeEvent =
   | { type: 'load_error'; sessionId: string; message: string }
   | { type: 'log'; sessionId: string; entry: RuntimeLogEntry }
   | { type: 'state'; sessionId: string; state: RuntimeStateSnapshot }
-  | { type: 'dialogue_request'; sessionId: string; npcRef: string; text: string }
+  | { type: 'dialogue_request'; sessionId: string; requestId: string; npcRef: string; text: string }
   | { type: 'exited'; sessionId: string; code: number | null }
   | { type: 'failed'; sessionId: string | null; message: string };
 
