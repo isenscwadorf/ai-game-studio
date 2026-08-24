@@ -64,6 +64,14 @@ function collectRefs(value: unknown, path: Array<string | number> = []): RefHit[
   return Object.entries(value).flatMap(([key, child]) => collectRefs(child, [...path, key]));
 }
 
+function isNativeManagedAssetRef(hit: RefHit): boolean {
+  const field = hit.path.at(-1);
+  if (field === 'asset_catalog_ref') {
+    return hit.path.length === 2 && hit.path[0] === 'manifest' && hit.ref.startsWith('asset_catalog.');
+  }
+  return field === 'visual_identity_ref' && hit.ref.startsWith('asset_identity.');
+}
+
 function collectCredentialKeyIssues(value: unknown, path: Array<string | number> = []): ValidationIssue[] {
   if (Array.isArray(value)) {
     return value.flatMap((item, index) => collectCredentialKeyIssues(item, [...path, index]));
@@ -161,7 +169,7 @@ export function validateProject(snapshot: unknown): ValidationResult {
   });
 
   for (const hit of refHits) {
-    if (!definitionIds.has(hit.ref)) {
+    if (!definitionIds.has(hit.ref) && !isNativeManagedAssetRef(hit)) {
       errors.push({
         code: 'REFERENCE_NOT_FOUND',
         path: pathFor(hit.path),
