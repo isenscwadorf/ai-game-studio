@@ -62,7 +62,7 @@ func _test_valid_project(root: String) -> void:
     _write_location(root)
     _write_scene(root)
     var result: Dictionary = ProjectLoader.load_project(root, "location.kitchen", "dialogue.scene_intro")
-    _assert(result.get("ok") == true, "valid project should load: %s" % result.get("errors", []))
+    _assert(result.get("ok") == true, "valid project should load: %s" % [result.get("errors", [])])
     _assert(result.get("project", {}).get("locations", {}).has("location.kitchen"), "start location should be indexed")
     _assert(result.get("project", {}).get("dialogue_scenes", {}).has("dialogue.scene_intro"), "entry scene should be indexed")
 
