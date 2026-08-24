@@ -42,7 +42,7 @@ describe('VisualAssetControls', () => {
       gateway={visualGateway}
       onEnsureSaved={onEnsureSaved}
       onProjectReload={onProjectReload}
-      projectRoot="C:\\Games\\Us"
+      projectRoot={'C:\\Games\\Us'}
       subjectId="character.maria"
       visualKind="character_sprite"
     />);
@@ -67,7 +67,7 @@ describe('VisualAssetControls', () => {
       gateway={visualGateway}
       onEnsureSaved={vi.fn().mockResolvedValue(false)}
       onProjectReload={vi.fn()}
-      projectRoot="C:\\Games\\Us"
+      projectRoot={'C:\\Games\\Us'}
       subjectId="character.maria"
       visualKind="character_sprite"
     />);
@@ -88,7 +88,7 @@ describe('VisualAssetControls', () => {
       gateway={visualGateway}
       onEnsureSaved={onEnsureSaved}
       onProjectReload={onProjectReload}
-      projectRoot="C:\\Games\\Us"
+      projectRoot={'C:\\Games\\Us'}
       subjectId="character.maria"
       visualKind="character_sprite"
     />);
