@@ -1,6 +1,6 @@
 use std::{io::Read, net::TcpListener};
 
-use serde::{Deserialize, Serialize};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_json::Value;
 
 pub(crate) const PROTOCOL: &str = "aigs.playtest";
@@ -61,21 +61,158 @@ struct RawEnvelope {
     payload: Value,
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct EmptyPayload {}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct MessagePayload {
+    message: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct DialogueRequestPayload {
+    npc_ref: String,
+    text: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ExitedPayload {
+    code: Option<i32>,
+}
+
+fn random_hex(byte_count: usize) -> Result<String, String> {
+    let mut bytes = vec![0u8; byte_count];
+    getrandom::fill(&mut bytes).map_err(|error| format!("failed to obtain OS randomness: {error}"))?;
+    Ok(bytes.iter().map(|byte| format!("{byte:02x}")).collect())
+}
+
+fn constant_time_eq(left: &[u8], right: &[u8]) -> bool {
+    if left.len() != right.len() {
+        return false;
+    }
+    let mut difference = 0u8;
+    for (left_byte, right_byte) in left.iter().zip(right) {
+        difference |= left_byte ^ right_byte;
+    }
+    difference == 0
+}
+
+fn decode_payload<T: DeserializeOwned>(payload: Value, message_type: &str) -> Result<T, String> {
+    serde_json::from_value(payload)
+        .map_err(|error| format!("invalid payload for {message_type}: {error}"))
+}
+
 pub(crate) fn bind_loopback() -> Result<BridgeBootstrap, String> {
-    Err("not implemented".to_owned())
+    let listener = TcpListener::bind(("127.0.0.1", 0))
+        .map_err(|error| format!("failed to bind runtime bridge to loopback: {error}"))?;
+    let address = listener
+        .local_addr()
+        .map_err(|error| format!("failed to read runtime bridge address: {error}"))?;
+    if !address.ip().is_loopback() {
+        return Err("runtime bridge refused a non-loopback bind".to_owned());
+    }
+    Ok(BridgeBootstrap {
+        listener,
+        endpoint: address.to_string(),
+        session_id: format!("session.{}", random_hex(16)?),
+        secret: random_hex(32)?,
+    })
 }
 
 pub(crate) fn decode_incoming(
-    _line: &str,
-    _expected_session_id: &str,
-    _expected_secret: &str,
-    _authenticated: bool,
+    line: &str,
+    expected_session_id: &str,
+    expected_secret: &str,
+    authenticated: bool,
 ) -> Result<IncomingMessage, String> {
-    Err("not implemented".to_owned())
+    if line.len() > MAX_MESSAGE_BYTES {
+        return Err("runtime message exceeded the configured maximum size".to_owned());
+    }
+    let envelope: RawEnvelope =
+        serde_json::from_str(line).map_err(|error| format!("malformed runtime JSON: {error}"))?;
+    if envelope.protocol != PROTOCOL {
+        return Err("runtime protocol identifier mismatch".to_owned());
+    }
+    if envelope.protocol_version != PROTOCOL_VERSION {
+        return Err(format!(
+            "runtime protocol version mismatch: expected {PROTOCOL_VERSION}, received {}",
+            envelope.protocol_version
+        ));
+    }
+    if envelope.session_id != expected_session_id {
+        return Err("runtime session ID mismatch".to_owned());
+    }
+    if envelope.message_id.trim().is_empty() || envelope.message_id.len() > 128 {
+        return Err("runtime message ID must be a non-empty bounded string".to_owned());
+    }
+
+    if !authenticated {
+        if envelope.message_type != "session.hello" {
+            return Err("runtime must authenticate before sending normal traffic".to_owned());
+        }
+        let hello: HelloPayload = decode_payload(envelope.payload, "session.hello")?;
+        if !constant_time_eq(hello.secret.as_bytes(), expected_secret.as_bytes()) {
+            return Err("runtime session secret did not match".to_owned());
+        }
+        return Ok(IncomingMessage::Hello(hello));
+    }
+
+    match envelope.message_type.as_str() {
+        "runtime.ready" => {
+            let _: EmptyPayload = decode_payload(envelope.payload, "runtime.ready")?;
+            Ok(IncomingMessage::Ready)
+        }
+        "project.loaded" => {
+            let _: EmptyPayload = decode_payload(envelope.payload, "project.loaded")?;
+            Ok(IncomingMessage::ProjectLoaded)
+        }
+        "project.load_error" => {
+            let payload: MessagePayload = decode_payload(envelope.payload, "project.load_error")?;
+            Ok(IncomingMessage::LoadError { message: payload.message })
+        }
+        "runtime.log" => Ok(IncomingMessage::Log(decode_payload(envelope.payload, "runtime.log")?)),
+        "runtime.state" => Ok(IncomingMessage::State(decode_payload(envelope.payload, "runtime.state")?)),
+        "dialogue.request" => {
+            let payload: DialogueRequestPayload = decode_payload(envelope.payload, "dialogue.request")?;
+            Ok(IncomingMessage::DialogueRequest {
+                npc_ref: payload.npc_ref,
+                text: payload.text,
+            })
+        }
+        "runtime.exited" => {
+            let payload: ExitedPayload = decode_payload(envelope.payload, "runtime.exited")?;
+            Ok(IncomingMessage::Exited { code: payload.code })
+        }
+        "session.hello" => Err("runtime session is already authenticated".to_owned()),
+        other => Err(format!("unknown runtime message type: {other}")),
+    }
 }
 
-pub(crate) fn read_bounded_line<R: Read>(_reader: &mut R) -> Result<String, String> {
-    Err("not implemented".to_owned())
+pub(crate) fn read_bounded_line<R: Read>(reader: &mut R) -> Result<String, String> {
+    let mut bytes = Vec::new();
+    let mut byte = [0u8; 1];
+    loop {
+        match reader.read(&mut byte) {
+            Ok(0) if bytes.is_empty() => return Err("runtime connection closed before a message arrived".to_owned()),
+            Ok(0) => break,
+            Ok(_) if byte[0] == b'\n' => break,
+            Ok(_) => {
+                bytes.push(byte[0]);
+                if bytes.len() > MAX_MESSAGE_BYTES {
+                    return Err("runtime message exceeded the configured maximum size".to_owned());
+                }
+            }
+            Err(error) => return Err(format!("failed to read runtime message: {error}")),
+        }
+    }
+    if bytes.last() == Some(&b'\r') {
+        bytes.pop();
+    }
+    String::from_utf8(bytes).map_err(|_| "runtime message must be UTF-8".to_owned())
 }
 
 #[cfg(test)]
