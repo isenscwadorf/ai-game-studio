@@ -599,7 +599,7 @@ pub(crate) fn import_visual_asset(
     let root = existing_project_root(&project_root)?;
     let source = Path::new(&source_path);
     ensure_regular_file(source)?;
-    let (extension, mime_type) = classify_image_extension(source)?;
+    let (extension, _) = classify_image_extension(source)?;
     let bytes = fs::read(source).map_err(|error| format!("failed to read imported visual: {error}"))?;
     verify_image_signature(&bytes, extension)?;
     let content_sha256 = sha256_hex(&bytes);
