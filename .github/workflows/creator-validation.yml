@@ -22,6 +22,15 @@ jobs:
         working-directory: apps/creator
       - run: npm run verify
         working-directory: apps/creator
+      - name: Upload regenerated schema artifacts on drift
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: regenerated-schema-artifacts
+          path: |
+            apps/creator/src/generated/schemaCatalog.ts
+            apps/creator/src/generated/schemaValidators.ts
+          if-no-files-found: error
 
   windows-native:
     runs-on: windows-latest
