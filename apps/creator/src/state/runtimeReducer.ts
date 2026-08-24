@@ -24,6 +24,59 @@ export const initialRuntimeState: RuntimeUiState = {
   lastError: null,
 };
 
-export function runtimeReducer(_state: RuntimeUiState, _event: RuntimeEvent): RuntimeUiState {
-  throw new Error('not implemented');
+const MAX_RUNTIME_LOGS = 200;
+
+function isCurrentSession(state: RuntimeUiState, event: RuntimeEvent): boolean {
+  return 'sessionId' in event && event.sessionId !== null && event.sessionId === state.sessionId;
+}
+
+export function runtimeReducer(state: RuntimeUiState, event: RuntimeEvent): RuntimeUiState {
+  if (event.type === 'launching') {
+    return {
+      ...initialRuntimeState,
+      status: 'Launching',
+      sessionId: event.sessionId,
+    };
+  }
+
+  if (event.type === 'failed' && event.sessionId === null) {
+    return {
+      ...state,
+      status: 'Failed',
+      lastError: event.message,
+    };
+  }
+
+  if (!isCurrentSession(state, event)) {
+    return state;
+  }
+
+  switch (event.type) {
+    case 'ready':
+      return { ...state, status: 'Running', lastError: null };
+    case 'project_loaded':
+      return { ...state, projectLoaded: true };
+    case 'load_error':
+      return { ...state, status: 'Failed', lastError: event.message };
+    case 'failed':
+      return { ...state, status: 'Failed', lastError: event.message };
+    case 'log': {
+      const logs = [...state.logs, event.entry];
+      return { ...state, logs: logs.slice(Math.max(0, logs.length - MAX_RUNTIME_LOGS)) };
+    }
+    case 'state':
+      return {
+        ...state,
+        currentLocationRef: event.state.currentLocationRef,
+        activeSceneRef: event.state.activeSceneRef,
+        activeNpcRef: event.state.activeNpcRef,
+        aiStatus: event.state.aiStatus,
+      };
+    case 'dialogue_request':
+      return state;
+    case 'exited':
+      return { ...state, status: 'Exited' };
+    case 'launching':
+      return state;
+  }
 }
