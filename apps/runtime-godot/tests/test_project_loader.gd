@@ -51,10 +51,10 @@ func _write_location(root: String) -> void:
 
 func _write_scene(root: String) -> void:
     _write_json(root + "/dialogue/dialogue.scene_intro.json", {
-        "schema_id": "aigs.dialogue_scene.definition", "schema_version": 1,
+        "schema_id": "aigs.dialogue.scene", "schema_version": 1,
         "id": "dialogue.scene_intro", "kind": "dialogue_scene", "display_name": "Intro",
-        "input_mode": "free", "entry_id": "entry.start",
-        "entries": [{"id": "entry.start", "type": "narration", "text": "Snow falls.", "next": null}]
+        "input_mode": "free", "entry_point": "entry.start",
+        "entries": [{"id": "entry.start", "type": "narration", "text": "Snow falls."}]
     })
 
 func _test_valid_project(root: String) -> void:
