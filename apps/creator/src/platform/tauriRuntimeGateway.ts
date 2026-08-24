@@ -90,10 +90,11 @@ export function decodeRuntimeEvent(value: unknown): RuntimeEvent {
       };
     }
     case 'dialogue_request': {
-      if (!hasOnlyKeys(value, ['type', 'sessionId', 'npcRef', 'text'])) throw new Error('Malformed dialogue_request runtime event.');
+      if (!hasOnlyKeys(value, ['type', 'sessionId', 'requestId', 'npcRef', 'text'])) throw new Error('Malformed dialogue_request runtime event.');
       return {
         type: 'dialogue_request',
         sessionId: requiredString(value.sessionId, 'sessionId'),
+        requestId: requiredString(value.requestId, 'requestId'),
         npcRef: requiredString(value.npcRef, 'npcRef'),
         text: requiredString(value.text, 'text'),
       };
