@@ -16,8 +16,10 @@ export type ProjectManifest = {
   extensions?: Record<string, Record<string, unknown>>;
 };
 
+export type DefinitionCollection = 'characters' | 'locations' | 'dialogue';
+
 export type StoredDefinition = {
-  collection: 'characters' | 'locations';
+  collection: DefinitionCollection;
   document: Record<string, unknown> & {
     schema_id: string;
     id: string;

@@ -19,6 +19,13 @@ interface RefHit {
   path: Array<string | number>;
 }
 
+interface DialogueSceneInfo {
+  definitionIndex: number;
+  documentPath: string;
+  document: Record<string, unknown>;
+  entryIds: Set<string>;
+}
+
 const credentialKeyPattern = /^(?:api[_-]?key|secret(?:[_-]?key)?|token|access[_-]?token|auth[_-]?token|bearer|password|credentials?|client[_-]?secret|private[_-]?key)$/i;
 
 const validators = new Map<string, ValidateFunction>(
@@ -90,6 +97,94 @@ function collectCredentialKeyIssues(value: unknown, path: Array<string | number>
       : [];
     return [...issue, ...collectCredentialKeyIssues(child, childPath)];
   });
+}
+
+function dialogueTarget(
+  value: unknown,
+  currentSceneId: string,
+  targetPath: string,
+  scenes: Map<string, DialogueSceneInfo>,
+  errors: ValidationIssue[],
+): void {
+  if (value === null || !isRecord(value) || typeof value.entry_id !== 'string') return;
+  let targetSceneId = currentSceneId;
+  if (value.scene_ref !== null) {
+    if (!isRecord(value.scene_ref) || typeof value.scene_ref.ref !== 'string') return;
+    targetSceneId = value.scene_ref.ref;
+  }
+  const targetScene = scenes.get(targetSceneId);
+  if (!targetScene) {
+    errors.push({
+      code: 'DIALOGUE_TARGET_SCENE_NOT_FOUND',
+      path: `${targetPath}/scene_ref`,
+      message: `Dialogue target scene not found: ${targetSceneId}.`,
+      schemaId: 'aigs.dialogue.scene',
+    });
+    return;
+  }
+  if (!targetScene.entryIds.has(value.entry_id)) {
+    errors.push({
+      code: 'DIALOGUE_TARGET_ENTRY_NOT_FOUND',
+      path: `${targetPath}/entry_id`,
+      message: `Dialogue target entry not found: ${targetSceneId} / ${value.entry_id}.`,
+      schemaId: 'aigs.dialogue.scene',
+    });
+  }
+}
+
+function validateDialogueSemantics(definitions: unknown[], errors: ValidationIssue[]): void {
+  const scenes = new Map<string, DialogueSceneInfo>();
+
+  definitions.forEach((storedDefinition, index) => {
+    const wrapped = isRecord(storedDefinition) && 'document' in storedDefinition;
+    const document = wrapped && isRecord(storedDefinition.document)
+      ? storedDefinition.document
+      : storedDefinition;
+    if (!isRecord(document) || document.schema_id !== 'aigs.dialogue.scene' || typeof document.id !== 'string') return;
+    const documentPath = wrapped ? `/definitions/${index}/document` : `/definitions/${index}`;
+    const entryIds = new Set<string>();
+    if (Array.isArray(document.entries)) {
+      document.entries.forEach((entry, entryIndex) => {
+        if (!isRecord(entry) || typeof entry.entry_id !== 'string') return;
+        if (entryIds.has(entry.entry_id)) {
+          errors.push({
+            code: 'DIALOGUE_ENTRY_ID_DUPLICATE',
+            path: `${documentPath}/entries/${entryIndex}/entry_id`,
+            message: `Duplicate dialogue entry id: ${entry.entry_id}.`,
+            schemaId: 'aigs.dialogue.scene',
+          });
+        }
+        entryIds.add(entry.entry_id);
+      });
+    }
+    scenes.set(document.id, { definitionIndex: index, documentPath, document, entryIds });
+  });
+
+  for (const [sceneId, scene] of scenes) {
+    if (typeof scene.document.entry_point === 'string' && !scene.entryIds.has(scene.document.entry_point)) {
+      errors.push({
+        code: 'DIALOGUE_ENTRY_POINT_NOT_FOUND',
+        path: `${scene.documentPath}/entry_point`,
+        message: `Dialogue entry point not found: ${scene.document.entry_point}.`,
+        schemaId: 'aigs.dialogue.scene',
+      });
+    }
+    if (!Array.isArray(scene.document.entries)) continue;
+    scene.document.entries.forEach((entry, entryIndex) => {
+      if (!isRecord(entry)) return;
+      const entryPath = `${scene.documentPath}/entries/${entryIndex}`;
+      if ((entry.kind === 'line' || entry.kind === 'narration') && 'next' in entry) {
+        dialogueTarget(entry.next, sceneId, `${entryPath}/next`, scenes, errors);
+      }
+      if (entry.kind === 'choice' && Array.isArray(entry.options)) {
+        entry.options.forEach((option, optionIndex) => {
+          if (isRecord(option)) {
+            dialogueTarget(option.target, sceneId, `${entryPath}/options/${optionIndex}/target`, scenes, errors);
+          }
+        });
+      }
+    });
+  }
 }
 
 export function validateDocument(schemaId: string, value: unknown): ValidationResult {
@@ -167,6 +262,8 @@ export function validateProject(snapshot: unknown): ValidationResult {
       ? ['definitions', index, 'document']
       : ['definitions', index]));
   });
+
+  validateDialogueSemantics(snapshot.definitions, errors);
 
   for (const hit of refHits) {
     if (!definitionIds.has(hit.ref) && !isNativeManagedAssetRef(hit)) {

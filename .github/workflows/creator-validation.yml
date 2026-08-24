@@ -23,6 +23,31 @@ jobs:
       - run: npm run verify
         working-directory: apps/creator
 
+  runtime-godot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Download pinned Godot 4.7.2
+        run: |
+          curl -fL -o godot.zip https://github.com/godotengine/godot-builds/releases/download/4.7.2-stable/Godot_v4.7.2-stable_linux.x86_64.zip
+          unzip -q godot.zip -d .godot-bin
+          chmod +x .godot-bin/Godot_v4.7.2-stable_linux.x86_64
+      - name: Verify Godot version
+        run: python tools/runtime/verify_godot_version.py .godot-bin/Godot_v4.7.2-stable_linux.x86_64
+      - name: Project loader tests
+        run: timeout 30s .godot-bin/Godot_v4.7.2-stable_linux.x86_64 --headless --path apps/runtime-godot --script res://tests/test_project_loader.gd
+      - name: Bridge protocol tests
+        run: timeout 30s .godot-bin/Godot_v4.7.2-stable_linux.x86_64 --headless --path apps/runtime-godot --script res://tests/test_bridge_protocol.gd
+      - name: Dialogue runtime tests
+        run: timeout 30s .godot-bin/Godot_v4.7.2-stable_linux.x86_64 --headless --path apps/runtime-godot --script res://tests/test_dialogue_runtime.gd
+      - name: VN stage state tests
+        run: timeout 30s .godot-bin/Godot_v4.7.2-stable_linux.x86_64 --headless --path apps/runtime-godot --script res://tests/test_stage_state.gd
+      - name: VN screen tests
+        run: timeout 30s .godot-bin/Godot_v4.7.2-stable_linux.x86_64 --headless --path apps/runtime-godot --script res://tests/test_runtime_screen.gd
+      - name: Runtime application tests
+        run: timeout 30s .godot-bin/Godot_v4.7.2-stable_linux.x86_64 --headless --path apps/runtime-godot --script res://tests/test_runtime_app.gd
+
   windows-native:
     runs-on: windows-latest
     steps:

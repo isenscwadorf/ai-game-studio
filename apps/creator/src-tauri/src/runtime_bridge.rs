@@ -1,11 +1,13 @@
-use std::{io::Read, net::TcpListener};
+use std::net::{TcpListener, TcpStream};
 
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_json::Value;
+use tungstenite::{accept, Message, WebSocket};
 
 pub(crate) const PROTOCOL: &str = "aigs.playtest";
 pub(crate) const PROTOCOL_VERSION: u32 = 1;
 pub(crate) const MAX_MESSAGE_BYTES: usize = 256 * 1024;
+pub(crate) type RuntimeSocket = WebSocket<TcpStream>;
 
 #[derive(Debug)]
 pub(crate) struct BridgeBootstrap {
@@ -45,7 +47,11 @@ pub(crate) enum IncomingMessage {
     LoadError { message: String },
     Log(LogPayload),
     State(StatePayload),
-    DialogueRequest { npc_ref: String, text: String },
+    DialogueRequest {
+        request_id: String,
+        npc_ref: String,
+        text: String,
+    },
     Exited { code: Option<i32> },
 }
 
@@ -74,6 +80,7 @@ struct MessagePayload {
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct DialogueRequestPayload {
+    request_id: String,
     npc_ref: String,
     text: String,
 }
@@ -106,6 +113,16 @@ fn decode_payload<T: DeserializeOwned>(payload: Value, message_type: &str) -> Re
         .map_err(|error| format!("invalid payload for {message_type}: {error}"))
 }
 
+fn require_bounded_text(value: &str, field: &str, maximum: usize) -> Result<(), String> {
+    if value.trim().is_empty() {
+        return Err(format!("runtime {field} must not be empty"));
+    }
+    if value.len() > maximum {
+        return Err(format!("runtime {field} exceeded the configured maximum length"));
+    }
+    Ok(())
+}
+
 pub(crate) fn bind_loopback() -> Result<BridgeBootstrap, String> {
     let listener = TcpListener::bind(("127.0.0.1", 0))
         .map_err(|error| format!("failed to bind runtime bridge to loopback: {error}"))?;
@@ -117,23 +134,85 @@ pub(crate) fn bind_loopback() -> Result<BridgeBootstrap, String> {
     }
     Ok(BridgeBootstrap {
         listener,
-        endpoint: address.to_string(),
+        endpoint: format!("ws://{address}"),
         session_id: format!("session.{}", random_hex(16)?),
         secret: random_hex(32)?,
     })
 }
 
+pub(crate) fn accept_websocket(listener: TcpListener) -> Result<RuntimeSocket, String> {
+    let (stream, peer) = listener
+        .accept()
+        .map_err(|error| format!("failed to accept runtime bridge connection: {error}"))?;
+    if !peer.ip().is_loopback() {
+        return Err("runtime bridge rejected a non-loopback client".to_owned());
+    }
+    accept(stream).map_err(|error| format!("runtime WebSocket handshake failed: {error}"))
+}
+
+pub(crate) fn send_envelope(
+    socket: &mut RuntimeSocket,
+    session_id: &str,
+    message_id: &str,
+    message_type: &str,
+    payload: Value,
+) -> Result<(), String> {
+    require_bounded_text(message_id, "message ID", 128)?;
+    require_bounded_text(message_type, "message type", 128)?;
+    let text = serde_json::json!({
+        "protocol": PROTOCOL,
+        "protocol_version": PROTOCOL_VERSION,
+        "session_id": session_id,
+        "message_id": message_id,
+        "type": message_type,
+        "payload": payload,
+    })
+    .to_string();
+    if text.len() > MAX_MESSAGE_BYTES {
+        return Err("runtime message exceeded the configured maximum size".to_owned());
+    }
+    socket
+        .send(Message::Text(text.into()))
+        .map_err(|error| format!("failed to send runtime WebSocket message: {error}"))
+}
+
+pub(crate) fn read_text_frame(socket: &mut RuntimeSocket) -> Result<Option<String>, String> {
+    loop {
+        let message = match socket.read() {
+            Ok(message) => message,
+            Err(tungstenite::Error::ConnectionClosed | tungstenite::Error::AlreadyClosed) => {
+                return Ok(None)
+            }
+            Err(error) => return Err(format!("failed to read runtime WebSocket message: {error}")),
+        };
+        if message.len() > MAX_MESSAGE_BYTES {
+            return Err("runtime message exceeded the configured maximum size".to_owned());
+        }
+        match message {
+            Message::Text(text) => return Ok(Some(text.to_string())),
+            Message::Close(_) => return Ok(None),
+            Message::Ping(payload) => socket
+                .send(Message::Pong(payload))
+                .map_err(|error| format!("failed to answer runtime WebSocket ping: {error}"))?,
+            Message::Pong(_) | Message::Frame(_) => {}
+            Message::Binary(_) => {
+                return Err("runtime bridge accepts text WebSocket frames only".to_owned())
+            }
+        }
+    }
+}
+
 pub(crate) fn decode_incoming(
-    line: &str,
+    text: &str,
     expected_session_id: &str,
     expected_secret: &str,
     authenticated: bool,
 ) -> Result<IncomingMessage, String> {
-    if line.len() > MAX_MESSAGE_BYTES {
+    if text.len() > MAX_MESSAGE_BYTES {
         return Err("runtime message exceeded the configured maximum size".to_owned());
     }
     let envelope: RawEnvelope =
-        serde_json::from_str(line).map_err(|error| format!("malformed runtime JSON: {error}"))?;
+        serde_json::from_str(text).map_err(|error| format!("malformed runtime JSON: {error}"))?;
     if envelope.protocol != PROTOCOL {
         return Err("runtime protocol identifier mismatch".to_owned());
     }
@@ -146,9 +225,7 @@ pub(crate) fn decode_incoming(
     if envelope.session_id != expected_session_id {
         return Err("runtime session ID mismatch".to_owned());
     }
-    if envelope.message_id.trim().is_empty() || envelope.message_id.len() > 128 {
-        return Err("runtime message ID must be a non-empty bounded string".to_owned());
-    }
+    require_bounded_text(&envelope.message_id, "message ID", 128)?;
 
     if !authenticated {
         if envelope.message_type != "session.hello" {
@@ -172,13 +249,27 @@ pub(crate) fn decode_incoming(
         }
         "project.load_error" => {
             let payload: MessagePayload = decode_payload(envelope.payload, "project.load_error")?;
-            Ok(IncomingMessage::LoadError { message: payload.message })
+            require_bounded_text(&payload.message, "load error", 16 * 1024)?;
+            Ok(IncomingMessage::LoadError {
+                message: payload.message,
+            })
         }
-        "runtime.log" => Ok(IncomingMessage::Log(decode_payload(envelope.payload, "runtime.log")?)),
-        "runtime.state" => Ok(IncomingMessage::State(decode_payload(envelope.payload, "runtime.state")?)),
+        "runtime.log" => Ok(IncomingMessage::Log(decode_payload(
+            envelope.payload,
+            "runtime.log",
+        )?)),
+        "runtime.state" => Ok(IncomingMessage::State(decode_payload(
+            envelope.payload,
+            "runtime.state",
+        )?)),
         "dialogue.request" => {
-            let payload: DialogueRequestPayload = decode_payload(envelope.payload, "dialogue.request")?;
+            let payload: DialogueRequestPayload =
+                decode_payload(envelope.payload, "dialogue.request")?;
+            require_bounded_text(&payload.request_id, "dialogue request ID", 128)?;
+            require_bounded_text(&payload.npc_ref, "dialogue NPC reference", 256)?;
+            require_bounded_text(&payload.text, "dialogue text", 16 * 1024)?;
             Ok(IncomingMessage::DialogueRequest {
+                request_id: payload.request_id,
                 npc_ref: payload.npc_ref,
                 text: payload.text,
             })
@@ -192,33 +283,9 @@ pub(crate) fn decode_incoming(
     }
 }
 
-pub(crate) fn read_bounded_line<R: Read>(reader: &mut R) -> Result<String, String> {
-    let mut bytes = Vec::new();
-    let mut byte = [0u8; 1];
-    loop {
-        match reader.read(&mut byte) {
-            Ok(0) if bytes.is_empty() => return Err("runtime connection closed before a message arrived".to_owned()),
-            Ok(0) => break,
-            Ok(_) if byte[0] == b'\n' => break,
-            Ok(_) => {
-                bytes.push(byte[0]);
-                if bytes.len() > MAX_MESSAGE_BYTES {
-                    return Err("runtime message exceeded the configured maximum size".to_owned());
-                }
-            }
-            Err(error) => return Err(format!("failed to read runtime message: {error}")),
-        }
-    }
-    if bytes.last() == Some(&b'\r') {
-        bytes.pop();
-    }
-    String::from_utf8(bytes).map_err(|_| "runtime message must be UTF-8".to_owned())
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::io::Cursor;
 
     fn envelope(session_id: &str, message_type: &str, payload: Value) -> String {
         serde_json::json!({
@@ -238,7 +305,7 @@ mod tests {
         let address = bridge.listener.local_addr().unwrap();
         assert!(address.ip().is_loopback());
         assert_ne!(address.port(), 0);
-        assert!(bridge.endpoint.starts_with("127.0.0.1:"));
+        assert!(bridge.endpoint.starts_with("ws://127.0.0.1:"));
         assert!(bridge.secret.len() >= 32);
         assert!(bridge.session_id.len() >= 16);
     }
@@ -254,60 +321,111 @@ mod tests {
     #[test]
     fn unauthenticated_traffic_accepts_only_matching_session_hello_secret() {
         let session_id = "session.abc";
-        let good = envelope(session_id, "session.hello", serde_json::json!({"secret":"right"}));
+        let good = envelope(
+            session_id,
+            "session.hello",
+            serde_json::json!({"secret":"right"}),
+        );
         assert_eq!(
             decode_incoming(&good, session_id, "right", false).unwrap(),
-            IncomingMessage::Hello(HelloPayload { secret: "right".to_owned() })
+            IncomingMessage::Hello(HelloPayload {
+                secret: "right".to_owned()
+            })
         );
 
-        let bad = envelope(session_id, "session.hello", serde_json::json!({"secret":"wrong"}));
-        assert!(decode_incoming(&bad, session_id, "right", false).unwrap_err().contains("secret"));
+        let bad = envelope(
+            session_id,
+            "session.hello",
+            serde_json::json!({"secret":"wrong"}),
+        );
+        assert!(decode_incoming(&bad, session_id, "right", false)
+            .unwrap_err()
+            .contains("secret"));
 
         let early = envelope(session_id, "runtime.ready", serde_json::json!({}));
-        assert!(decode_incoming(&early, session_id, "right", false).unwrap_err().contains("authenticate"));
+        assert!(decode_incoming(&early, session_id, "right", false)
+            .unwrap_err()
+            .contains("authenticate"));
     }
 
     #[test]
     fn rejects_wrong_protocol_version_session_unknown_type_and_malformed_json() {
         let session_id = "session.abc";
         let wrong_version = serde_json::json!({
-            "protocol": PROTOCOL, "protocol_version": 99, "session_id": session_id,
-            "message_id": "message.1", "type": "runtime.ready", "payload": {}
-        }).to_string();
+            "protocol": PROTOCOL,
+            "protocol_version": 99,
+            "session_id": session_id,
+            "message_id": "message.1",
+            "type": "runtime.ready",
+            "payload": {}
+        })
+        .to_string();
         assert!(decode_incoming(&wrong_version, session_id, "secret", true).is_err());
 
         let wrong_session = envelope("session.other", "runtime.ready", serde_json::json!({}));
         assert!(decode_incoming(&wrong_session, session_id, "secret", true).is_err());
 
-        let unknown = envelope(session_id, "runtime.exec", serde_json::json!({"command":"calc"}));
-        assert!(decode_incoming(&unknown, session_id, "secret", true).unwrap_err().contains("unknown"));
+        let unknown = envelope(
+            session_id,
+            "runtime.exec",
+            serde_json::json!({"command":"calc"}),
+        );
+        assert!(decode_incoming(&unknown, session_id, "secret", true)
+            .unwrap_err()
+            .contains("unknown"));
         assert!(decode_incoming("{not json", session_id, "secret", true).is_err());
     }
 
     #[test]
     fn decodes_registered_messages_into_typed_payloads() {
         let session_id = "session.abc";
-        let log = envelope(session_id, "runtime.log", serde_json::json!({"level":"info","message":"loaded"}));
-        assert_eq!(decode_incoming(&log, session_id, "secret", true).unwrap(), IncomingMessage::Log(LogPayload {
-            level: "info".to_owned(), message: "loaded".to_owned(),
-        }));
+        let log = envelope(
+            session_id,
+            "runtime.log",
+            serde_json::json!({"level":"info","message":"loaded"}),
+        );
+        assert_eq!(
+            decode_incoming(&log, session_id, "secret", true).unwrap(),
+            IncomingMessage::Log(LogPayload {
+                level: "info".to_owned(),
+                message: "loaded".to_owned(),
+            })
+        );
 
-        let state = envelope(session_id, "runtime.state", serde_json::json!({
-            "current_location_ref":"location.kitchen", "active_scene_ref":null,
-            "active_npc_ref":"character.maria", "ai_status":"idle"
-        }));
-        assert!(matches!(decode_incoming(&state, session_id, "secret", true).unwrap(), IncomingMessage::State(_)));
+        let state = envelope(
+            session_id,
+            "runtime.state",
+            serde_json::json!({
+                "current_location_ref":"location.kitchen",
+                "active_scene_ref":null,
+                "active_npc_ref":"character.maria",
+                "ai_status":"idle"
+            }),
+        );
+        assert!(matches!(
+            decode_incoming(&state, session_id, "secret", true).unwrap(),
+            IncomingMessage::State(_)
+        ));
 
-        let extra = envelope(session_id, "runtime.log", serde_json::json!({"level":"info","message":"x","extra":true}));
+        let dialogue = envelope(
+            session_id,
+            "dialogue.request",
+            serde_json::json!({
+                "request_id":"dialogue.1",
+                "npc_ref":"character.maria",
+                "text":"Are you okay?"
+            }),
+        );
+        assert!(matches!(
+            decode_incoming(&dialogue, session_id, "secret", true).unwrap(),
+            IncomingMessage::DialogueRequest { request_id, .. } if request_id == "dialogue.1"
+        ));
+
+        let extra = envelope(
+            session_id,
+            "runtime.log",
+            serde_json::json!({"level":"info","message":"x","extra":true}),
+        );
         assert!(decode_incoming(&extra, session_id, "secret", true).is_err());
-    }
-
-    #[test]
-    fn bounded_reader_rejects_oversized_messages() {
-        let mut okay = Cursor::new(b"{\"ok\":true}\n".to_vec());
-        assert_eq!(read_bounded_line(&mut okay).unwrap(), "{\"ok\":true}");
-
-        let mut oversized = Cursor::new(vec![b'x'; MAX_MESSAGE_BYTES + 1]);
-        assert!(read_bounded_line(&mut oversized).unwrap_err().contains("maximum"));
     }
 }
