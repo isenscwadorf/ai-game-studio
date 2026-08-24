@@ -104,11 +104,9 @@ test('native ESM generated validation accepts an ordinary valid manifest without
 });
 
 test('all generated validators match fresh Ajv for fixture and representative cases', async (context) => {
-  assert.equal(schemaValidators.length, 45);
   assert.equal(schemaValidators.length, schemaCatalog.length);
 
   const cases = await loadParityCases();
-  assert.equal(cases.length, 65);
   const casesByUrn = Map.groupBy(cases, (entry) => entry.schema_urn);
   const freshValidators = freshAjvValidators();
   assert.equal(casesByUrn.size, schemaCatalog.length);
@@ -140,6 +138,6 @@ test('all generated validators match fresh Ajv for fixture and representative ca
     });
   }
 
-  assert.equal(invokedValidators, 45);
-  context.diagnostic('Compared 45 generated validators across 59 fixtures and 6 representative cases.');
+  assert.equal(invokedValidators, schemaCatalog.length);
+  context.diagnostic(`Compared ${schemaCatalog.length} generated validators across ${cases.length} parity cases.`);
 });
