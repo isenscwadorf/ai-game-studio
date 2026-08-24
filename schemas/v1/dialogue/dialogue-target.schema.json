@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:aigs:schema:v1:dialogue-target",
+  "oneOf": [
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "scene_ref": { "type": "null" },
+        "entry_id": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_-]*(\\.[a-z0-9_-]+)*$"
+        }
+      },
+      "required": ["scene_ref", "entry_id"]
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "scene_ref": { "$ref": "urn:aigs:schema:v1:definition-ref" },
+        "entry_id": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_-]*(\\.[a-z0-9_-]+)*$"
+        }
+      },
+      "required": ["scene_ref", "entry_id"]
+    }
+  ]
+}
