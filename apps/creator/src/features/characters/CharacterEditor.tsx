@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
+import { VisualAssetControls } from '../../components/VisualAssetControls';
 import { createCharacterDefinition } from '../../domain/characterFactory';
 import type { StoredDefinition } from '../../domain/projectTypes';
 import { validateDocument } from '../../domain/validation';
+import type { VisualAssetGateway } from '../../platform/VisualAssetGateway';
 
 type EditorSpeech = Record<string, unknown> & { register?: string; notes?: string };
 type EditorPersona = Record<string, unknown> & {
@@ -24,6 +26,10 @@ type CharacterEditorProps = {
   onDelete: (id: string) => void;
   onSelect: (key: string) => void;
   onUpdate: (id: string, document: StoredDefinition['document']) => void;
+  projectRoot?: string | null;
+  visualAssetGateway?: VisualAssetGateway;
+  onEnsureSaved?: () => Promise<boolean>;
+  onProjectReload?: () => Promise<void>;
 };
 
 type CharacterListItem = { key: string; document: StoredDefinition['document'] };
@@ -56,10 +62,20 @@ function stringList(value: unknown): string[] {
   return Array.isArray(value) && value.every((item) => typeof item === 'string') ? value : [];
 }
 
+function definitionRef(value: unknown): string {
+  return isRecord(value) && typeof value.ref === 'string' ? value.ref : '';
+}
+
 function characterItems(definitions: StoredDefinition[]): CharacterListItem[] {
   return definitions
     .filter((definition) => definition.collection === 'characters')
     .map((definition, index) => ({ key: `character-${index}`, document: definition.document }));
+}
+
+function locationIds(definitions: StoredDefinition[]): string[] {
+  return definitions
+    .filter((definition) => definition.collection === 'locations')
+    .flatMap((definition) => typeof definition.document.id === 'string' ? [definition.document.id] : []);
 }
 
 export function normalizeMultilineList(value: string): string[] {
@@ -86,11 +102,24 @@ function ListField({ disabled, label, value, onCommit }: { disabled: boolean; la
   );
 }
 
-export function CharacterEditor({ busy, definitions, selectedCharacterKey, onCreate, onDelete, onSelect, onUpdate }: CharacterEditorProps) {
+export function CharacterEditor({
+  busy,
+  definitions,
+  selectedCharacterKey,
+  onCreate,
+  onDelete,
+  onSelect,
+  onUpdate,
+  projectRoot = null,
+  visualAssetGateway,
+  onEnsureSaved,
+  onProjectReload,
+}: CharacterEditorProps) {
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState('');
   const [nameDraft, setNameDraft] = useState('');
   const characters = characterItems(definitions);
+  const locations = locationIds(definitions);
   const selected = characters.find((character) => character.key === selectedCharacterKey)?.document;
   const editable = editableCharacter(selected);
   const editableId = stringValue(editable?.id);
@@ -166,6 +195,17 @@ export function CharacterEditor({ busy, definitions, selectedCharacterKey, onCre
             <p role="alert">Character data is malformed and cannot be edited safely.</p>
           ) : (
             <div key={editable.id}>
+              {visualAssetGateway && onEnsureSaved && onProjectReload ? (
+                <VisualAssetControls
+                  busy={busy}
+                  gateway={visualAssetGateway}
+                  onEnsureSaved={onEnsureSaved}
+                  onProjectReload={onProjectReload}
+                  projectRoot={projectRoot}
+                  subjectId={editableId}
+                  visualKind="character_sprite"
+                />
+              ) : null}
               <label className="form-field">
                 <span>Name</span>
                 <input
@@ -178,6 +218,22 @@ export function CharacterEditor({ busy, definitions, selectedCharacterKey, onCre
               <label className="form-field">
                 <span>Description</span>
                 <textarea disabled={busy} onChange={(event) => update((character) => ({ ...character, description: event.target.value }))} value={stringValue(editable.description)} />
+              </label>
+              <label className="form-field">
+                <span>Initial Location</span>
+                <select
+                  disabled={busy}
+                  onChange={(event) => update((character) => {
+                    const next = { ...character };
+                    if (event.target.value) next.initial_location_ref = { ref: event.target.value };
+                    else delete next.initial_location_ref;
+                    return next;
+                  })}
+                  value={definitionRef(editable.initial_location_ref)}
+                >
+                  <option value="">Not set</option>
+                  {locations.map((id) => <option key={id} value={id}>{id}</option>)}
+                </select>
               </label>
               <label className="form-field">
                 <span>Persona summary</span>
