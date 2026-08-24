@@ -1,3 +1,4 @@
+mod asset_import;
 mod project_fs;
 
 use project_fs::{create_project, open_project, save_project};
