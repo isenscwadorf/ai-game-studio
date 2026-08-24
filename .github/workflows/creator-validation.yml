@@ -3,9 +3,7 @@ name: Creator Validation
 on:
   pull_request:
   push:
-    branches:
-      - main
-      - isenscwadorf/creator-mvp-slice-2-runtime-red
+    branches: [main]
 
 permissions:
   contents: read
@@ -27,6 +25,7 @@ jobs:
 
   runtime-godot:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: Download pinned Godot 4.7.2
@@ -37,15 +36,17 @@ jobs:
       - name: Verify Godot version
         run: python tools/runtime/verify_godot_version.py .godot-bin/Godot_v4.7.2-stable_linux.x86_64
       - name: Project loader tests
-        run: .godot-bin/Godot_v4.7.2-stable_linux.x86_64 --headless --path apps/runtime-godot --script res://tests/test_project_loader.gd
+        run: timeout 30s .godot-bin/Godot_v4.7.2-stable_linux.x86_64 --headless --path apps/runtime-godot --script res://tests/test_project_loader.gd
       - name: Bridge protocol tests
-        run: .godot-bin/Godot_v4.7.2-stable_linux.x86_64 --headless --path apps/runtime-godot --script res://tests/test_bridge_protocol.gd
+        run: timeout 30s .godot-bin/Godot_v4.7.2-stable_linux.x86_64 --headless --path apps/runtime-godot --script res://tests/test_bridge_protocol.gd
       - name: Dialogue runtime tests
-        run: .godot-bin/Godot_v4.7.2-stable_linux.x86_64 --headless --path apps/runtime-godot --script res://tests/test_dialogue_runtime.gd
+        run: timeout 30s .godot-bin/Godot_v4.7.2-stable_linux.x86_64 --headless --path apps/runtime-godot --script res://tests/test_dialogue_runtime.gd
       - name: VN stage state tests
-        run: .godot-bin/Godot_v4.7.2-stable_linux.x86_64 --headless --path apps/runtime-godot --script res://tests/test_stage_state.gd
+        run: timeout 30s .godot-bin/Godot_v4.7.2-stable_linux.x86_64 --headless --path apps/runtime-godot --script res://tests/test_stage_state.gd
       - name: VN screen tests
-        run: .godot-bin/Godot_v4.7.2-stable_linux.x86_64 --headless --path apps/runtime-godot --script res://tests/test_runtime_screen.gd
+        run: timeout 30s .godot-bin/Godot_v4.7.2-stable_linux.x86_64 --headless --path apps/runtime-godot --script res://tests/test_runtime_screen.gd
+      - name: Runtime application tests
+        run: timeout 30s .godot-bin/Godot_v4.7.2-stable_linux.x86_64 --headless --path apps/runtime-godot --script res://tests/test_runtime_app.gd
 
   windows-native:
     runs-on: windows-latest
