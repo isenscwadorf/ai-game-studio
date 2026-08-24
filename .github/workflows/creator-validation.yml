@@ -44,6 +44,8 @@ jobs:
         run: .godot-bin/Godot_v4.7.2-stable_linux.x86_64 --headless --path apps/runtime-godot --script res://tests/test_dialogue_runtime.gd
       - name: VN stage state tests
         run: .godot-bin/Godot_v4.7.2-stable_linux.x86_64 --headless --path apps/runtime-godot --script res://tests/test_stage_state.gd
+      - name: VN screen tests
+        run: .godot-bin/Godot_v4.7.2-stable_linux.x86_64 --headless --path apps/runtime-godot --script res://tests/test_runtime_screen.gd
 
   windows-native:
     runs-on: windows-latest
