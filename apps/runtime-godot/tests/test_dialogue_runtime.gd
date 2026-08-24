@@ -6,6 +6,12 @@ var failures: Array[String] = []
 func _init() -> void:
     var runtime = DialogueRuntime.new()
     runtime.configure(_project())
+    runtime.set_active_npc("character.maria")
+    _assert(runtime.free_input_allowed(), "ordinary NPC conversation should permit free input without an authored scene")
+    runtime.append_ai_line("character.maria", "I'm here.")
+    _assert(runtime.history.size() == 1, "AI dialogue should append to current-session history")
+
+    runtime.configure(_project())
     _assert(runtime.start_scene("dialogue.intro") == OK, "intro scene should start")
     _assert(runtime.current_view_model().get("kind") == "line", "entry point should be a line")
     _assert(runtime.current_view_model().get("speaker_ref") == "character.maria", "line speaker should become active NPC")
