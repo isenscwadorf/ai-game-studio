@@ -36,6 +36,7 @@ export function VisualAssetControls({
   const [working, setWorking] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const disabled = busy || working || !projectRoot;
+  const framingId = `sprite-framing-${subjectId.replace(/[^a-zA-Z0-9_-]/g, '-')}`;
 
   async function loadCurrentAsset(root: string, id: string) {
     const current = await gateway.resolveVisualAsset(root, id, visualKind);
@@ -132,14 +133,19 @@ export function VisualAssetControls({
       )}
       {asset ? <small className="definition-list__id">{asset.projectPath}</small> : null}
       {visualKind === 'character_sprite' ? (
-        <label className="form-field">
-          <span>Sprite framing</span>
-          <select disabled={busy || working} onChange={(event) => setFraming(event.target.value as SpriteFraming)} value={framing}>
+        <div className="form-field">
+          <label htmlFor={framingId}>Sprite framing</label>
+          <select
+            disabled={busy || working}
+            id={framingId}
+            onChange={(event) => setFraming(event.target.value as SpriteFraming)}
+            value={framing}
+          >
             <option value="full_body">Full Body</option>
             <option value="two_thirds">Two Thirds</option>
           </select>
           <small>Framing is stored when the sprite is imported or replaced.</small>
-        </label>
+        </div>
       ) : null}
       <div className="visual-asset-controls__actions">
         <button disabled={disabled} onClick={() => void importOrReplace()} type="button">{asset ? 'Replace Visual' : 'Import Visual'}</button>
