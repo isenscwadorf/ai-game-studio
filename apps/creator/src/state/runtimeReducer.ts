@@ -76,7 +76,5 @@ export function runtimeReducer(state: RuntimeUiState, event: RuntimeEvent): Runt
       return state;
     case 'exited':
       return { ...state, status: 'Exited' };
-    case 'launching':
-      return state;
   }
 }
