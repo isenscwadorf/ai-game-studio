@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:aigs:schema:v1:dialogue-entry",
+  "oneOf": [
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "entry_id": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_-]*(\\.[a-z0-9_-]+)*$"
+        },
+        "kind": { "const": "line" },
+        "speaker_ref": { "$ref": "urn:aigs:schema:v1:definition-ref" },
+        "text": { "type": "string", "minLength": 1 },
+        "next": {
+          "oneOf": [
+            { "type": "null" },
+            { "$ref": "urn:aigs:schema:v1:dialogue-target" }
+          ]
+        }
+      },
+      "required": ["entry_id", "kind", "speaker_ref", "text", "next"]
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "entry_id": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_-]*(\\.[a-z0-9_-]+)*$"
+        },
+        "kind": { "const": "narration" },
+        "text": { "type": "string", "minLength": 1 },
+        "next": {
+          "oneOf": [
+            { "type": "null" },
+            { "$ref": "urn:aigs:schema:v1:dialogue-target" }
+          ]
+        }
+      },
+      "required": ["entry_id", "kind", "text", "next"]
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "entry_id": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_-]*(\\.[a-z0-9_-]+)*$"
+        },
+        "kind": { "const": "choice" },
+        "prompt": { "type": "string" },
+        "options": {
+          "type": "array",
+          "items": { "$ref": "urn:aigs:schema:v1:dialogue-choice-option" },
+          "minItems": 1
+        }
+      },
+      "required": ["entry_id", "kind", "options"]
+    }
+  ]
+}
